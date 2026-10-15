@@ -101,46 +101,6 @@ export const localStore = {
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
-async function loginWithSupabase(
-  username: string,
-  password: string,
-): Promise<Profile | null> {
-  const cleanUsername = username.trim().toLowerCase();
-  const cleanPassword = password.trim();
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('username', cleanUsername)
-    .eq('password_hash', cleanPassword);
-
-  console.log('[Auth] User lookup result:', data, error);
-
-  if (!data || data.length === 0) {
-    if (error) {
-      Alert.alert(
-        'Network Error',
-        `Unable to connect to authentication server: ${error.message || 'Please check your internet connection.'}`,
-      );
-    } else {
-      Alert.alert(
-        'User Not Found',
-        'No matching account found for the provided credentials. Please check your username and password, or contact an administrator.',
-      );
-    }
-    return null;
-  }
-
-  return data[0] as Profile;
-}
-
-function loginWithLocalStore(username: string, password: string): Profile | null {
-  const cleanUsername = username.trim().toLowerCase();
-  const cleanPassword = password.trim();
-  const profile = localStore.findByUsername(cleanUsername);
-  if (!profile || profile.password_hash !== cleanPassword) return null;
-  return profile;
-}
 
 // ─── Account-status check ─────────────────────────────────────────────────────
 
@@ -169,6 +129,7 @@ export interface LoginResult {
 
 interface AuthContextValue {
   user: Profile | null;
+  currentUser: Profile | null;
   isLoading: boolean;
   blockReason: AccountBlockReason;
   /** Attempt login; returns a LoginResult. */
@@ -186,6 +147,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
+  currentUser: null,
   isLoading: false,
   blockReason: null,
   login: async () => ({ success: false, error: 'Not initialized' }),
@@ -291,27 +253,65 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // ── Login ──────────────────────────────────────────────────────────────────
   const login = useCallback(
     async (username: string, password: string): Promise<LoginResult> => {
-      const cleanUsername = username.trim().toLowerCase();
-      const cleanPassword = password.trim();
-      if (!cleanUsername) return { success: false, error: 'Username is required.' };
-      if (!cleanPassword) return { success: false, error: 'Password is required.' };
+      // 1. Sanitize inputs
+      const cleanUser = username.trim().toLowerCase();
+      const cleanPass = password.trim();
+
+      if (!cleanUser) {
+        Alert.alert('Validation Error', 'Please enter your username.');
+        return { success: false, error: 'Username is required.' };
+      }
+      if (!cleanPass) {
+        Alert.alert('Validation Error', 'Please enter your password.');
+        return { success: false, error: 'Password is required.' };
+      }
 
       setIsLoading(true);
       try {
-        let profile: Profile | null;
+        // Query public.profiles directly
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('username', cleanUser);
 
-        if (isSupabaseConfigured) {
-          profile = await loginWithSupabase(cleanUsername, cleanPassword);
-        } else {
-          profile = loginWithLocalStore(cleanUsername, cleanPassword);
+        // Log everything
+        console.log('[Auth Debug] Query result:', { data, error });
+
+        // a) Network / Database Connection Error
+        if (error) {
+          Alert.alert('Database Error', error.message + ' (Code: ' + error.code + ')');
+          return { success: false, error: `${error.message} (Code: ${error.code})` };
         }
 
-        if (!profile) {
-          return { success: false, error: 'Incorrect username or password.' };
+        // b) User Not Found
+        if (!data || data.length === 0) {
+          Alert.alert('User Not Found', 'No profile found in database with username: ' + cleanUser);
+          return { success: false, error: 'No profile found in database with username: ' + cleanUser };
         }
 
-        const reason = getBlockReason(profile);
-        if (reason === 'terminated') {
+        // c) Password Check (Handles both plain text and hash)
+        const profile = data[0] as Profile;
+        const isPasswordMatch =
+          profile.password_hash === cleanPass ||
+          (typeof btoa !== 'undefined' && profile.password_hash === btoa(cleanPass));
+
+        if (!isPasswordMatch) {
+          Alert.alert(
+            'Password Mismatch',
+            'The password entered does not match the record for @' + cleanUser,
+          );
+          return {
+            success: false,
+            error: 'The password entered does not match the record for @' + cleanUser,
+          };
+        }
+
+        // d) Account Status Check
+        if (profile.status === 'terminated') {
+          Alert.alert(
+            'Account Terminated',
+            'This user account has been permanently terminated by Administration.',
+          );
           return {
             success: false,
             error: 'Account Permanently Terminated by Administration.',
@@ -319,19 +319,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             profile,
           };
         }
-        if (reason === 'suspended') {
-          return {
-            success: false,
-            error: 'Account Temporarily Suspended by Administration.',
-            blockedStatus: 'suspended',
-            suspendedUntil: profile.suspended_until,
-            profile,
-          };
+
+        if (profile.status === 'suspended') {
+          const isSuspended =
+            !profile.suspended_until || new Date(profile.suspended_until) > new Date();
+          if (isSuspended) {
+            const timeMsg = profile.suspended_until
+              ? 'This account is temporarily suspended until: ' +
+                new Date(profile.suspended_until).toLocaleString()
+              : 'This account is temporarily suspended by Administration.';
+            Alert.alert('Account Suspended', timeMsg);
+            return {
+              success: false,
+              error: 'Account Temporarily Suspended by Administration.',
+              blockedStatus: 'suspended',
+              suspendedUntil: profile.suspended_until,
+              profile,
+            };
+          }
         }
 
+        // If active, set currentUser = profile and successfully log in
         setUser(profile);
         setBlockReason(null);
         return { success: true, profile };
+      } catch (err: any) {
+        console.error('[Auth Debug] Unexpected login exception:', err);
+        Alert.alert(
+          'Database Error',
+          (err?.message || String(err)) + ' (Code: UNEXPECTED_EXCEPTION)',
+        );
+        return { success: false, error: String(err?.message || err) };
       } finally {
         setIsLoading(false);
       }
@@ -477,6 +495,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     <AuthContext.Provider
       value={{
         user,
+        currentUser: user,
         isLoading,
         blockReason,
         login,
