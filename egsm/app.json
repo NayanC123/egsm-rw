@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "EGSM",
+    "slug": "egsm",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#050A0E"
+    },
+    "ios": {
+      "bundleIdentifier": "com.gruup.social",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app requires access to your camera to take photos and share them in community posts and group discussions.",
+        "NSPhotoLibraryUsageDescription": "This app requires access to your photo library to share photos and media in community posts and group discussions.",
+        "NSMicrophoneUsageDescription": "This app requires access to your microphone to record voice messages in group discussions."
+      }
+    },
+    "android": {
+      "package": "com.gruup.social",
+      "adaptiveIcon": {
+        "backgroundColor": "#050A0E",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "This app requires access to your photo library to share photos and media in community posts and group discussions.",
+          "cameraPermission": "This app requires access to your camera to take photos and share them in community posts and group discussions."
+        }
+      ]
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
