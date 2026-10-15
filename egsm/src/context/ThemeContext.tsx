@@ -8,7 +8,9 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 export interface ThemeColors {
   mainBackground: string;
   surface: string;
+  inputSurface: string;
   border: string;
+  placeholder: string;
   primary: string;   // neon accent (buttons, active tab, links)
   accent: string;    // announcements / warnings / badges
   danger: string;    // terminations / deletions
@@ -18,19 +20,23 @@ export interface ThemeColors {
 
 const DARK: ThemeColors = {
   mainBackground: '#050A0E',
-  surface:        '#0D161E',
-  border:         '#1A2C38',
+  surface:        '#0D161F',
+  inputSurface:   '#0A1017',
+  border:         'rgba(255, 255, 255, 0.07)',
+  placeholder:    '#4B5A68',
   primary:        '#00FFCC',
   accent:         '#FF6600',
   danger:         '#FF3366',
   textPrimary:    '#FFFFFF',
-  textSecondary:  '#8A9BA8',
+  textSecondary:  '#7E8E9C',
 };
 
 const LIGHT: ThemeColors = {
   mainBackground: '#F4F7F9',
   surface:        '#FFFFFF',
+  inputSurface:   '#F0F4F8',
   border:         '#DCE4EC',
+  placeholder:    '#8A9BA8',
   primary:        '#00B894',
   accent:         '#FF6600',
   danger:         '#FF3366',

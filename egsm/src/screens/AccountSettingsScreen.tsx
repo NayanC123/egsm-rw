@@ -169,7 +169,7 @@ export const AccountSettingsScreen: React.FC = () => {
                 if (nameSuccess) setNameSuccess(null);
                 if (nameError) setNameError(null);
               }}
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={isDark ? '#4B5A68' : colors.textSecondary}
               placeholder="Enter your display name"
             />
 
@@ -217,7 +217,7 @@ export const AccountSettingsScreen: React.FC = () => {
                 if (passwordError) setPasswordError(null);
               }}
               secureTextEntry
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={isDark ? '#4B5A68' : colors.textSecondary}
               placeholder="Enter current password"
             />
 
@@ -232,7 +232,7 @@ export const AccountSettingsScreen: React.FC = () => {
                 if (passwordError) setPasswordError(null);
               }}
               secureTextEntry
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={isDark ? '#4B5A68' : colors.textSecondary}
               placeholder="Enter new password (min. 4 characters)"
             />
 
@@ -247,7 +247,7 @@ export const AccountSettingsScreen: React.FC = () => {
                 if (passwordError) setPasswordError(null);
               }}
               secureTextEntry
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={isDark ? '#4B5A68' : colors.textSecondary}
               placeholder="Confirm new password"
             />
 
@@ -390,6 +390,7 @@ const styles = (
     pageTitle: {
       fontSize: 26,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
       marginBottom: 4,
     },
@@ -400,7 +401,7 @@ const styles = (
     },
     card: {
       backgroundColor: c.surface,
-      borderRadius: 16,
+      borderRadius: 18,
       padding: 18,
       borderWidth: 1,
       borderColor: c.border,
@@ -415,6 +416,7 @@ const styles = (
     cardTitle: {
       fontSize: 16,
       fontWeight: '700',
+      letterSpacing: -0.3,
       color: c.textPrimary,
       marginBottom: 4,
     },
@@ -425,12 +427,12 @@ const styles = (
       marginBottom: 14,
     },
     readOnlyBadge: {
-      backgroundColor: 'rgba(255, 102, 0, 0.15)',
+      backgroundColor: 'rgba(255, 102, 0, 0.1)',
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: 6,
       borderWidth: 1,
-      borderColor: c.accent,
+      borderColor: 'rgba(255, 102, 0, 0.3)',
     },
     readOnlyBadgeText: {
       color: c.accent,
@@ -441,10 +443,10 @@ const styles = (
     readOnlyInputBox: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: isDark ? '#050A0E' : '#EDF2F7',
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 14,
+      backgroundColor: isDark ? '#0A1017' : '#EDF2F7',
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
       borderWidth: 1,
       borderColor: c.border,
       marginBottom: 8,
@@ -471,39 +473,39 @@ const styles = (
       letterSpacing: 0.5,
     },
     input: {
-      backgroundColor: c.mainBackground,
+      backgroundColor: isDark ? '#0A1017' : c.mainBackground,
       borderWidth: 1,
       borderColor: c.border,
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
       color: c.textPrimary,
-      fontSize: 14,
+      fontSize: 15,
       marginBottom: 14,
     },
     primaryBtn: {
       backgroundColor: '#00FFCC',
-      borderRadius: 10,
-      paddingVertical: 13,
+      borderRadius: 16,
+      paddingVertical: 15,
       alignItems: 'center',
       justifyContent: 'center',
       marginTop: 2,
     },
     primaryBtnText: {
       color: '#050A0E',
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '700',
-      letterSpacing: 0.5,
+      letterSpacing: 0.2,
     },
     btnDisabled: {
       opacity: 0.6,
     },
     successBox: {
-      backgroundColor: 'rgba(0, 255, 204, 0.1)',
+      backgroundColor: 'rgba(0, 255, 204, 0.08)',
       borderWidth: 1,
-      borderColor: '#00FFCC',
-      borderRadius: 8,
-      padding: 10,
+      borderColor: 'rgba(0, 255, 204, 0.3)',
+      borderRadius: 12,
+      padding: 12,
       marginBottom: 12,
     },
     successText: {
@@ -512,11 +514,11 @@ const styles = (
       fontWeight: '600',
     },
     errorBox: {
-      backgroundColor: 'rgba(255, 51, 102, 0.1)',
+      backgroundColor: 'rgba(255, 51, 102, 0.08)',
       borderWidth: 1,
-      borderColor: c.danger,
-      borderRadius: 8,
-      padding: 10,
+      borderColor: 'rgba(255, 51, 102, 0.3)',
+      borderRadius: 12,
+      padding: 12,
       marginBottom: 12,
     },
     errorText: {
@@ -540,8 +542,8 @@ const styles = (
     swatchItem: {
       flex: 1,
       alignItems: 'center',
-      backgroundColor: c.mainBackground,
-      borderRadius: 10,
+      backgroundColor: isDark ? '#0A1017' : c.mainBackground,
+      borderRadius: 12,
       padding: 10,
       borderWidth: 1,
       borderColor: c.border,
@@ -549,8 +551,8 @@ const styles = (
     swatchColorBox: {
       width: '100%',
       height: 32,
-      borderRadius: 6,
-      borderWidth: 1.5,
+      borderRadius: 8,
+      borderWidth: 1,
       marginBottom: 8,
     },
     swatchLabel: {
@@ -569,11 +571,11 @@ const styles = (
       color: c.textPrimary,
     },
     logoutBtn: {
-      backgroundColor: 'rgba(255, 51, 102, 0.12)',
-      borderWidth: 1.5,
-      borderColor: '#FF3366',
-      borderRadius: 12,
-      paddingVertical: 14,
+      backgroundColor: 'rgba(255, 51, 102, 0.1)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 51, 102, 0.3)',
+      borderRadius: 16,
+      paddingVertical: 15,
       alignItems: 'center',
       marginTop: 6,
     },
@@ -581,7 +583,7 @@ const styles = (
       color: '#FF3366',
       fontWeight: '700',
       fontSize: 15,
-      letterSpacing: 0.5,
+      letterSpacing: 0.2,
     },
   });
 

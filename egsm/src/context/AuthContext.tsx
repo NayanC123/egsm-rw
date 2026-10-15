@@ -12,6 +12,7 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react';
+import { Alert } from 'react-native';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
 import type { Profile, PasswordResetRequest } from '../types/database';
 
@@ -104,20 +105,40 @@ async function loginWithSupabase(
   username: string,
   password: string,
 ): Promise<Profile | null> {
+  const cleanUsername = username.trim().toLowerCase();
+  const cleanPassword = password.trim();
+
   const { data, error } = await supabase
     .from('profiles')
     .select('*')
-    .eq('username', username)
-    .eq('password_hash', password)
-    .single();
+    .eq('username', cleanUsername)
+    .eq('password_hash', cleanPassword);
 
-  if (error || !data) return null;
-  return data as Profile;
+  console.log('[Auth] User lookup result:', data, error);
+
+  if (!data || data.length === 0) {
+    if (error) {
+      Alert.alert(
+        'Network Error',
+        `Unable to connect to authentication server: ${error.message || 'Please check your internet connection.'}`,
+      );
+    } else {
+      Alert.alert(
+        'User Not Found',
+        'No matching account found for the provided credentials. Please check your username and password, or contact an administrator.',
+      );
+    }
+    return null;
+  }
+
+  return data[0] as Profile;
 }
 
 function loginWithLocalStore(username: string, password: string): Profile | null {
-  const profile = localStore.findByUsername(username);
-  if (!profile || profile.password_hash !== password) return null;
+  const cleanUsername = username.trim().toLowerCase();
+  const cleanPassword = password.trim();
+  const profile = localStore.findByUsername(cleanUsername);
+  if (!profile || profile.password_hash !== cleanPassword) return null;
   return profile;
 }
 
@@ -270,18 +291,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // ── Login ──────────────────────────────────────────────────────────────────
   const login = useCallback(
     async (username: string, password: string): Promise<LoginResult> => {
-      const cleanUsername = username.trim();
+      const cleanUsername = username.trim().toLowerCase();
+      const cleanPassword = password.trim();
       if (!cleanUsername) return { success: false, error: 'Username is required.' };
-      if (!password) return { success: false, error: 'Password is required.' };
+      if (!cleanPassword) return { success: false, error: 'Password is required.' };
 
       setIsLoading(true);
       try {
         let profile: Profile | null;
 
         if (isSupabaseConfigured) {
-          profile = await loginWithSupabase(cleanUsername, password);
+          profile = await loginWithSupabase(cleanUsername, cleanPassword);
         } else {
-          profile = loginWithLocalStore(cleanUsername, password);
+          profile = loginWithLocalStore(cleanUsername, cleanPassword);
         }
 
         if (!profile) {

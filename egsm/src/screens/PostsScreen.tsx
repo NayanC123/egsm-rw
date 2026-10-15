@@ -610,7 +610,7 @@ const PostsScreen: React.FC = () => {
               id="input-post-subject"
               style={s.subjectInput}
               placeholder="e.g. Protocol Upgrade Proposal 2026..."
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor="#4B5A68"
               value={newSubject}
               onChangeText={setNewSubject}
               maxLength={120}
@@ -626,7 +626,7 @@ const PostsScreen: React.FC = () => {
               id="input-post-content"
               style={s.contentInput}
               placeholder="Write the full body of your discussion or technical analysis here..."
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor="#4B5A68"
               value={newContent}
               onChangeText={setNewContent}
               multiline
@@ -767,7 +767,7 @@ const PostsScreen: React.FC = () => {
                 id="input-custom-image-url"
                 style={s.pickerInput}
                 placeholder="https://example.com/image.jpg"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor="#4B5A68"
                 value={customImageUrl}
                 onChangeText={setCustomImageUrl}
                 autoCapitalize="none"
@@ -837,7 +837,7 @@ const PostsScreen: React.FC = () => {
                 id="input-custom-doc-name"
                 style={s.pickerInput}
                 placeholder="Document filename (e.g. Audit_Report.pdf)"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor="#4B5A68"
                 value={customDocName}
                 onChangeText={setCustomDocName}
               />
@@ -845,7 +845,7 @@ const PostsScreen: React.FC = () => {
                 id="input-custom-doc-url"
                 style={s.pickerInput}
                 placeholder="Document download URL (https://...)"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor="#4B5A68"
                 value={customDocUrl}
                 onChangeText={setCustomDocUrl}
                 autoCapitalize="none"
@@ -1238,7 +1238,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: c.mainBackground,
+      backgroundColor: '#050A0E',
     },
     centeredContent: {
       flex: 1,
@@ -1247,7 +1247,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       padding: 24,
     },
     loadingText: {
-      color: c.textSecondary,
+      color: '#7E8E9C',
       fontSize: 14,
       marginTop: 12,
     },
@@ -1260,46 +1260,49 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       paddingHorizontal: 16,
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: c.border,
-      backgroundColor: c.surface,
+      borderBottomColor: 'rgba(255, 255, 255, 0.07)',
+      backgroundColor: isDark ? '#0D161F' : c.surface,
     },
     titleContainer: {
       flexDirection: 'row',
       alignItems: 'center',
     },
     headerTitle: {
-      fontSize: 20,
+      fontSize: 22,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
       marginRight: 8,
     },
     headerTitleCenter: {
       fontSize: 18,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
     },
     permanentBadge: {
-      backgroundColor: '#00FFCC22',
-      borderColor: '#00FFCC',
+      backgroundColor: 'rgba(0, 255, 204, 0.08)',
+      borderColor: 'rgba(0, 255, 204, 0.25)',
       borderWidth: 1,
-      borderRadius: 4,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
+      borderRadius: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
     },
     permanentBadgeText: {
       color: '#00FFCC',
-      fontSize: 9,
+      fontSize: 10,
       fontWeight: '700',
+      letterSpacing: 0.5,
     },
     leaderboardButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#00FFCC18',
-      borderColor: '#00FFCC',
-      borderWidth: 1.5,
+      backgroundColor: 'rgba(0, 255, 204, 0.08)',
+      borderColor: 'rgba(0, 255, 204, 0.3)',
+      borderWidth: 1,
       paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 18,
+      paddingHorizontal: 14,
+      borderRadius: 20,
     },
     leaderboardButtonText: {
       color: '#00FFCC',
@@ -1311,7 +1314,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       paddingHorizontal: 8,
     },
     headerBackText: {
-      color: c.primary,
+      color: '#00FFCC',
       fontSize: 15,
       fontWeight: '600',
     },
@@ -1322,7 +1325,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       paddingBottom: 90, // Leave room for fixed bottom action bar
     },
     announcementsHeaderBox: {
-      marginBottom: 10,
+      marginBottom: 12,
     },
     announcementsSectionLabel: {
       color: '#FF6600',
@@ -1331,32 +1334,40 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       letterSpacing: 0.5,
     },
     postCard: {
-      backgroundColor: c.surface,
-      borderRadius: 12,
+      backgroundColor: '#0D161F',
+      borderRadius: 18,
       padding: 16,
       marginBottom: 14,
       borderWidth: 1,
     },
     regularCard: {
-      borderColor: c.border,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
     },
     announcementCard: {
-      borderColor: '#FF6600',
-      backgroundColor: isDark ? '#1C120A' : '#FFF6EE',
-      borderWidth: 1.8,
+      borderColor: 'rgba(255, 102, 0, 0.25)',
+      backgroundColor: isDark ? 'rgba(255, 102, 0, 0.06)' : '#FFF9F5',
+      borderWidth: 1,
+      shadowColor: '#FF6600',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 10,
+      elevation: 3,
     },
     announcementBadgeRow: {
-      backgroundColor: '#FF6600',
+      backgroundColor: 'rgba(255, 102, 0, 0.12)',
+      borderColor: '#FF6600',
+      borderWidth: 1,
       alignSelf: 'flex-start',
       paddingHorizontal: 8,
       paddingVertical: 3,
-      borderRadius: 4,
+      borderRadius: 8,
       marginBottom: 10,
     },
     announcementBadgeText: {
-      color: '#FFFFFF',
+      color: '#FF6600',
       fontSize: 11,
       fontWeight: '700',
+      letterSpacing: 0.4,
     },
     postMetaRow: {
       flexDirection: 'row',
@@ -1375,31 +1386,32 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     },
     authorUsername: {
       fontSize: 12,
-      color: c.textSecondary,
+      color: '#7E8E9C',
     },
     timestampText: {
-      fontSize: 11,
-      color: c.textSecondary,
+      fontSize: 12,
+      color: '#7E8E9C',
     },
     postSubject: {
       fontSize: 17,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
       marginBottom: 6,
     },
     postPreviewText: {
-      fontSize: 14,
-      color: c.textSecondary,
-      lineHeight: 20,
+      fontSize: 15,
+      lineHeight: 22,
+      color: '#A1B1C0',
       marginBottom: 12,
     },
     postFooterRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingTop: 8,
+      paddingTop: 10,
       borderTopWidth: 1,
-      borderTopColor: c.border,
+      borderTopColor: 'rgba(255, 255, 255, 0.07)',
     },
     attachmentPillsRow: {
       flexDirection: 'row',
@@ -1407,7 +1419,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     },
     attachmentIndicator: {
       backgroundColor: isDark ? '#16222E' : '#E8EFF5',
-      borderRadius: 6,
+      borderRadius: 8,
       paddingHorizontal: 8,
       paddingVertical: 4,
       marginRight: 6,
@@ -1418,17 +1430,17 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: c.textPrimary,
     },
     satisfactionBadge: {
-      borderRadius: 12,
+      borderRadius: 14,
       paddingHorizontal: 10,
       paddingVertical: 4,
       borderWidth: 1,
     },
     satisfactionBadgeActive: {
-      borderColor: '#00FFCC',
-      backgroundColor: '#00FFCC18',
+      borderColor: 'rgba(0, 255, 204, 0.3)',
+      backgroundColor: 'rgba(0, 255, 204, 0.08)',
     },
     satisfactionBadgeEmpty: {
-      borderColor: c.border,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       backgroundColor: 'transparent',
     },
     satisfactionBadgeText: {
@@ -1439,7 +1451,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: '#00FFCC',
     },
     satisfactionTextEmpty: {
-      color: c.textSecondary,
+      color: '#7E8E9C',
     },
 
     // ── Fixed Bottom Action Bar ─────────────────────────────
@@ -1451,26 +1463,22 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       paddingHorizontal: 16,
       paddingTop: 10,
       paddingBottom: Platform.OS === 'ios' ? 24 : 14,
-      backgroundColor: c.surface,
+      backgroundColor: '#050A0E',
       borderTopWidth: 1,
-      borderTopColor: c.border,
+      borderTopColor: 'rgba(255, 255, 255, 0.07)',
     },
     newPostButton: {
       backgroundColor: '#00FFCC',
-      borderRadius: 10,
-      paddingVertical: 14,
+      borderRadius: 16,
+      paddingVertical: 15,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: '#00FFCC',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 3,
     },
     newPostButtonText: {
       color: '#050A0E',
       fontSize: 16,
       fontWeight: '700',
+      letterSpacing: 0.5,
     },
     buttonDisabled: {
       opacity: 0.5,
@@ -1484,10 +1492,10 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       padding: 16,
     },
     permanenceBanner: {
-      backgroundColor: '#FF66001E',
-      borderColor: '#FF6600',
-      borderWidth: 1.5,
-      borderRadius: 10,
+      backgroundColor: 'rgba(255, 102, 0, 0.08)',
+      borderColor: 'rgba(255, 102, 0, 0.25)',
+      borderWidth: 1,
+      borderRadius: 14,
       padding: 14,
       marginBottom: 20,
     },
@@ -1495,7 +1503,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: '#FF6600',
       fontSize: 13,
       fontWeight: '700',
-      lineHeight: 18,
+      lineHeight: 19,
     },
     inputGroup: {
       marginBottom: 18,
@@ -1510,24 +1518,26 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: '#FF3366',
     },
     subjectInput: {
-      backgroundColor: c.surface,
-      borderColor: c.border,
+      backgroundColor: isDark ? '#0A1017' : '#F0F4F8',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
       color: c.textPrimary,
       fontSize: 15,
+      lineHeight: 22,
     },
     contentInput: {
-      backgroundColor: c.surface,
-      borderColor: c.border,
+      backgroundColor: isDark ? '#0A1017' : '#F0F4F8',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 12,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 16,
       color: c.textPrimary,
       fontSize: 15,
+      lineHeight: 22,
       minHeight: 150,
     },
     attachmentToolbar: {
@@ -1537,23 +1547,23 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     toolbarTitle: {
       fontSize: 13,
       fontWeight: '600',
-      color: c.textSecondary,
+      color: '#7E8E9C',
       marginBottom: 8,
     },
     toolbarButtonsRow: {
       flexDirection: 'row',
     },
     toolButton: {
-      backgroundColor: c.surface,
-      borderColor: c.primary,
+      backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
+      borderColor: 'rgba(0, 255, 204, 0.3)',
       borderWidth: 1,
-      borderRadius: 8,
-      paddingVertical: 8,
-      paddingHorizontal: 12,
+      borderRadius: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
       marginRight: 10,
     },
     toolButtonText: {
-      color: c.primary,
+      color: '#00FFCC',
       fontSize: 13,
       fontWeight: '600',
     },
@@ -1577,9 +1587,9 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     thumbnailImage: {
       width: 72,
       height: 72,
-      borderRadius: 8,
+      borderRadius: 12,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
     },
     removeThumbnailButton: {
       position: 'absolute',
@@ -1601,11 +1611,11 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: c.surface,
-      borderColor: c.border,
+      backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
-      borderRadius: 8,
-      padding: 10,
+      borderRadius: 14,
+      padding: 14,
       marginBottom: 8,
     },
     docItemInfo: {
@@ -1613,20 +1623,20 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       marginRight: 8,
     },
     docItemName: {
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: '600',
       color: c.textPrimary,
     },
     docItemSize: {
-      fontSize: 11,
-      color: c.textSecondary,
+      fontSize: 12,
+      color: '#7E8E9C',
       marginTop: 2,
     },
     removeDocButton: {
-      backgroundColor: '#FF336622',
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 6,
+      backgroundColor: 'rgba(255, 51, 102, 0.12)',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 8,
     },
     removeDocText: {
       color: '#FF3366',
@@ -1636,18 +1646,18 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
 
     // ── Detail & 0–10 Rating View ───────────────────────────
     adminToggleButton: {
-      paddingVertical: 5,
-      paddingHorizontal: 10,
-      borderRadius: 14,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 16,
       borderWidth: 1,
     },
     adminToggleActive: {
-      backgroundColor: '#FF660022',
+      backgroundColor: 'rgba(255, 102, 0, 0.12)',
       borderColor: '#FF6600',
     },
     adminToggleInactive: {
       backgroundColor: 'transparent',
-      borderColor: c.textSecondary,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
     },
     adminToggleText: {
       fontSize: 12,
@@ -1657,7 +1667,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: '#FF6600',
     },
     adminToggleTextInactive: {
-      color: c.textSecondary,
+      color: '#7E8E9C',
     },
     detailScrollView: {
       flex: 1,
@@ -1666,21 +1676,24 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       padding: 16,
     },
     detailAnnouncementBadge: {
-      backgroundColor: '#FF6600',
+      backgroundColor: 'rgba(255, 102, 0, 0.12)',
+      borderColor: '#FF6600',
+      borderWidth: 1,
       paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 6,
+      paddingVertical: 4,
+      borderRadius: 8,
       alignSelf: 'flex-start',
       marginBottom: 12,
     },
     detailAnnouncementText: {
-      color: '#FFFFFF',
+      color: '#FF6600',
       fontSize: 12,
       fontWeight: '700',
     },
     detailSubject: {
       fontSize: 22,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
       lineHeight: 28,
       marginBottom: 14,
@@ -1694,7 +1707,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       width: 42,
       height: 42,
       borderRadius: 21,
-      backgroundColor: c.primary,
+      backgroundColor: '#00FFCC',
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 10,
@@ -1714,28 +1727,29 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     },
     detailUsername: {
       fontSize: 12,
-      color: c.textSecondary,
+      color: '#7E8E9C',
       marginTop: 2,
     },
     detailContentCard: {
-      backgroundColor: c.surface,
-      borderRadius: 12,
-      padding: 16,
-      borderColor: c.border,
+      backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
+      borderRadius: 18,
+      padding: 18,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
       marginBottom: 20,
     },
     detailContentText: {
       fontSize: 15,
+      lineHeight: 22,
       color: c.textPrimary,
-      lineHeight: 23,
     },
     gallerySection: {
       marginBottom: 20,
     },
     sectionHeader: {
-      fontSize: 15,
+      fontSize: 16,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
       marginBottom: 10,
     },
@@ -1744,10 +1758,10 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     },
     galleryImageWrapper: {
       marginRight: 12,
-      borderRadius: 10,
+      borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
     },
     galleryImage: {
       width: 220,
@@ -1758,7 +1772,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       bottom: 6,
       right: 6,
       backgroundColor: '#050A0ECC',
-      borderRadius: 4,
+      borderRadius: 6,
       paddingHorizontal: 6,
       paddingVertical: 2,
     },
@@ -1771,11 +1785,11 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       marginBottom: 20,
     },
     detailDocCard: {
-      backgroundColor: c.surface,
-      borderColor: c.border,
+      backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
-      borderRadius: 10,
-      padding: 12,
+      borderRadius: 14,
+      padding: 14,
       marginBottom: 10,
       flexDirection: 'row',
       alignItems: 'center',
@@ -1797,7 +1811,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     },
     docTypeBadge: {
       backgroundColor: isDark ? '#16222E' : '#E8EFF5',
-      borderRadius: 4,
+      borderRadius: 6,
       paddingHorizontal: 6,
       paddingVertical: 2,
       marginRight: 8,
@@ -1808,14 +1822,14 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: c.textPrimary,
     },
     detailDocSize: {
-      fontSize: 11,
-      color: c.textSecondary,
+      fontSize: 12,
+      color: '#7E8E9C',
     },
     openDocButton: {
-      backgroundColor: c.primary,
+      backgroundColor: '#00FFCC',
       paddingVertical: 8,
-      paddingHorizontal: 12,
-      borderRadius: 6,
+      paddingHorizontal: 14,
+      borderRadius: 12,
     },
     openDocButtonText: {
       color: '#050A0E',
@@ -1825,16 +1839,17 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
 
     // ── Interactive 0–10 Rating Section ─────────────────────
     ratingSectionCard: {
-      backgroundColor: c.surface,
-      borderRadius: 14,
-      borderColor: '#00FFCC44',
-      borderWidth: 1.5,
-      padding: 16,
+      backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
+      borderRadius: 18,
+      borderColor: 'rgba(0, 255, 204, 0.25)',
+      borderWidth: 1,
+      padding: 18,
       marginBottom: 20,
     },
     ratingSectionTitle: {
       fontSize: 17,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
       marginBottom: 12,
     },
@@ -1850,11 +1865,12 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     satisfactionPercentText: {
       fontSize: 32,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: '#00FFCC',
     },
     satisfactionSubtitle: {
       fontSize: 12,
-      color: c.textSecondary,
+      color: '#7E8E9C',
     },
     progressBarTrack: {
       height: 8,
@@ -1882,9 +1898,9 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     numberButton: {
       width: '13%',
       aspectRatio: 1,
-      borderRadius: 8,
-      backgroundColor: isDark ? '#141E28' : '#F0F4F8',
-      borderColor: c.border,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#0A1017' : '#F0F4F8',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
       alignItems: 'center',
       justifyContent: 'center',
@@ -1903,9 +1919,9 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: '#050A0E',
     },
     yourScoreNotice: {
-      backgroundColor: '#00FFCC14',
-      padding: 10,
-      borderRadius: 8,
+      backgroundColor: 'rgba(0, 255, 204, 0.08)',
+      padding: 12,
+      borderRadius: 12,
       marginBottom: 16,
     },
     yourScoreText: {
@@ -1918,7 +1934,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     },
     othersRatingsSection: {
       borderTopWidth: 1,
-      borderTopColor: c.border,
+      borderTopColor: 'rgba(255, 255, 255, 0.07)',
       paddingTop: 14,
     },
     othersRatingsTitle: {
@@ -1929,16 +1945,16 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     },
     noOthersText: {
       fontSize: 12,
-      color: c.textSecondary,
+      color: '#7E8E9C',
       fontStyle: 'italic',
     },
     ratingRowCard: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: 8,
+      paddingVertical: 10,
       borderBottomWidth: 1,
-      borderBottomColor: c.border,
+      borderBottomColor: 'rgba(255, 255, 255, 0.07)',
     },
     raterInfo: {
       flex: 1,
@@ -1949,14 +1965,14 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: c.textPrimary,
     },
     raterUsername: {
-      fontSize: 11,
-      color: c.textSecondary,
+      fontSize: 12,
+      color: '#7E8E9C',
     },
     raterScoreBadge: {
-      backgroundColor: '#00FFCC18',
-      borderColor: '#00FFCC',
+      backgroundColor: 'rgba(0, 255, 204, 0.1)',
+      borderColor: 'rgba(0, 255, 204, 0.3)',
       borderWidth: 1,
-      borderRadius: 6,
+      borderRadius: 8,
       paddingHorizontal: 8,
       paddingVertical: 4,
     },
@@ -1993,64 +2009,63 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       height: '80%',
     },
 
-    // ── Leaderboard View: styles live in src/components/Posts/LeaderboardView.tsx ──
-
     // ── Attachment Modals ───────────────────────────────────
     modalOverlay: {
       flex: 1,
-      backgroundColor: '#000000B3',
+      backgroundColor: 'rgba(5, 10, 14, 0.88)',
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
     },
     pickerModalBox: {
-      backgroundColor: c.surface,
-      borderColor: c.border,
+      backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
-      borderRadius: 14,
-      padding: 20,
+      borderRadius: 20,
+      padding: 22,
       width: '100%',
       maxWidth: 420,
     },
     pickerModalTitle: {
       fontSize: 18,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
       marginBottom: 6,
     },
     pickerModalSubtitle: {
-      fontSize: 12,
-      color: c.textSecondary,
+      fontSize: 13,
+      color: '#7E8E9C',
       marginBottom: 14,
-      lineHeight: 17,
+      lineHeight: 18,
     },
     pickerInput: {
-      backgroundColor: isDark ? '#080E14' : '#F0F4F8',
-      borderColor: c.border,
+      backgroundColor: isDark ? '#0A1017' : '#F0F4F8',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
       color: c.textPrimary,
-      fontSize: 14,
+      fontSize: 15,
       marginBottom: 10,
     },
     modalActionButton: {
-      backgroundColor: c.primary,
-      borderRadius: 8,
-      paddingVertical: 10,
+      backgroundColor: '#00FFCC',
+      borderRadius: 16,
+      paddingVertical: 15,
       alignItems: 'center',
       marginBottom: 14,
     },
     modalActionText: {
       color: '#050A0E',
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '700',
     },
     presetSectionLabel: {
       fontSize: 12,
       fontWeight: '600',
-      color: c.textSecondary,
+      color: '#7E8E9C',
       marginBottom: 8,
     },
     presetRow: {
@@ -2058,12 +2073,12 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       alignItems: 'center',
       paddingVertical: 8,
       borderBottomWidth: 1,
-      borderBottomColor: c.border,
+      borderBottomColor: 'rgba(255, 255, 255, 0.07)',
     },
     presetThumb: {
       width: 36,
       height: 36,
-      borderRadius: 4,
+      borderRadius: 6,
       marginRight: 10,
     },
     presetLabel: {
@@ -2077,28 +2092,28 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       marginRight: 10,
     },
     presetDocMeta: {
-      fontSize: 11,
-      color: c.textSecondary,
+      fontSize: 12,
+      color: '#7E8E9C',
       marginTop: 2,
     },
     nativePickerButton: {
-      backgroundColor: '#072E27',
-      borderColor: c.primary,
+      backgroundColor: 'rgba(0, 255, 204, 0.08)',
+      borderColor: 'rgba(0, 255, 204, 0.25)',
       borderWidth: 1,
-      borderRadius: 8,
-      paddingVertical: 11,
+      borderRadius: 14,
+      paddingVertical: 14,
       alignItems: 'center',
       marginBottom: 8,
     },
     nativePickerText: {
-      color: c.primary,
+      color: '#00FFCC',
       fontSize: 13,
       fontWeight: '700',
     },
     orDividerText: {
       textAlign: 'center',
       fontSize: 11,
-      color: c.textSecondary,
+      color: '#7E8E9C',
       marginVertical: 10,
       fontWeight: '600',
     },
@@ -2108,16 +2123,16 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       alignItems: 'center',
     },
     modalCloseText: {
-      color: c.textSecondary,
+      color: '#7E8E9C',
       fontSize: 14,
       fontWeight: '600',
     },
     backButton: {
       marginTop: 16,
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      backgroundColor: c.primary,
-      borderRadius: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      backgroundColor: '#00FFCC',
+      borderRadius: 16,
     },
     backButtonText: {
       color: '#050A0E',
@@ -2136,12 +2151,13 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     emptyTitle: {
       fontSize: 18,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
       marginBottom: 6,
     },
     emptySubtitle: {
       fontSize: 13,
-      color: c.textSecondary,
+      color: '#7E8E9C',
       textAlign: 'center',
       lineHeight: 18,
     },

@@ -130,34 +130,39 @@ const AppShell: React.FC = () => {
       {/* Content area */}
       <View style={s.content}>{renderScreen()}</View>
 
-      {/* Bottom Navigation Bar */}
-      <View style={s.navBar}>
-        {visibleTabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              id={`tab-${tab.id}`}
-              style={s.navItem}
-              onPress={() => setActiveTab(tab.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`${tab.label} tab`}
-            >
-              <Text style={[s.navEmoji, isActive && s.navEmojiActive]}>
-                {tab.emoji}
-              </Text>
-              <Text
-                style={[
-                  s.navLabel,
-                  { color: isActive ? colors.primary : colors.textSecondary },
-                ]}
+      {/* Floating Modern Bottom Dock */}
+      <View style={s.dockContainer}>
+        <View style={s.floatingDock}>
+          {visibleTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                id={`tab-${tab.id}`}
+                style={[s.dockItem, isActive && s.dockItemActive]}
+                onPress={() => setActiveTab(tab.id)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`${tab.label} tab`}
               >
-                {tab.label}
-              </Text>
-              {isActive && <View style={[s.activeBar, { backgroundColor: colors.primary }]} />}
-            </TouchableOpacity>
-          );
-        })}
+                <Text style={[s.dockEmoji, isActive && s.dockEmojiActive]}>
+                  {tab.emoji}
+                </Text>
+                <Text
+                  style={[
+                    s.dockLabel,
+                    { color: isActive ? '#00FFCC' : '#7E8E9C' },
+                    isActive && s.dockLabelActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {tab.label}
+                </Text>
+                {isActive && <View style={s.activeDot} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
@@ -167,26 +172,63 @@ const AppShell: React.FC = () => {
 
 const shellStyles = (c: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
-    safe:          { flex: 1, backgroundColor: c.mainBackground },
-    content:       { flex: 1 },
-    navBar: {
-      flexDirection:    'row',
-      backgroundColor:  c.surface,
-      borderTopWidth:   1,
-      borderTopColor:   c.border,
-      paddingBottom:    Platform.OS === 'ios' ? 20 : 6,
-      paddingTop:       8,
+    safe:    { flex: 1, backgroundColor: c.mainBackground },
+    content: { flex: 1 },
+    dockContainer: {
+      position: 'relative',
+      backgroundColor: 'transparent',
     },
-    navItem:       { flex: 1, alignItems: 'center', position: 'relative' },
-    navEmoji:      { fontSize: 22, marginBottom: 2, opacity: 0.55 },
-    navEmojiActive:{ opacity: 1 },
-    navLabel:      { fontSize: 10, fontWeight: '600' },
-    activeBar: {
-      position:     'absolute',
-      top:          0,
-      height:       2,
-      width:        '60%',
+    floatingDock: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-around',
+      marginHorizontal: 16,
+      marginBottom: Platform.OS === 'ios' ? 24 : 20,
+      borderRadius: 24,
+      backgroundColor: '#0D161F',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
+      paddingVertical: 8,
+      paddingHorizontal: 6,
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    dockItem: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+      borderRadius: 18,
+    },
+    dockItemActive: {
+      backgroundColor: 'rgba(0, 255, 204, 0.12)',
+    },
+    dockEmoji: {
+      fontSize: 18,
+      marginBottom: 3,
+      opacity: 0.55,
+    },
+    dockEmojiActive: {
+      opacity: 1,
+    },
+    dockLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      letterSpacing: -0.2,
+    },
+    dockLabelActive: {
+      fontWeight: '700',
+    },
+    activeDot: {
+      width: 4,
+      height: 4,
       borderRadius: 2,
+      backgroundColor: '#00FFCC',
+      marginTop: 3,
     },
   });
 

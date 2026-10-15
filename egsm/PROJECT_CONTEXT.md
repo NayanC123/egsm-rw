@@ -9,13 +9,14 @@
 
 ## 2. Color Palette & Theme Specification
 - **Dark Mode (Default)**:
-  - Main Background: `#050A0E`
-  - Elevated Surface / Cards: `#0D161E`
-  - Border / Divider: `#1A2C38`
-  - Primary Neon (Buttons, Active Tabs, Links, Highlights): `#00FFCC`
-  - Accent (Pinned Announcements, Warnings, Badges): `#FF6600`
+  - Main Background: Deep slate-black `#050A0E`
+  - Elevated Surface / Cards: `#0D161F` with soft hairline border `borderColor: 'rgba(255, 255, 255, 0.07)'`, `borderWidth: 1`
+  - Input Surface: `#0A1017` with subtle focus border `rgba(0, 255, 204, 0.4)` and placeholder `#4B5A68`
+  - Border / Divider: `rgba(255, 255, 255, 0.07)` (all harsh 2px solid neon borders removed)
+  - Primary Neon (Buttons, Active Tabs, Links, Highlights): `#00FFCC` (Pill shaped buttons `borderRadius: 16`, dark text `#050A0E`, `fontWeight: '700'`)
+  - Accent (Pinned Announcements, Warnings, Badges): `#FF6600` (Pinned announcements styled with warm subtle amber glow `rgba(255, 102, 0, 0.1)` and crisp `#FF6600` tags)
   - Danger (Terminations, Deletions, Hard Mute): `#FF3366`
-  - Text Primary: `#FFFFFF` | Text Secondary: `#8A9BA8`
+  - Text Primary: `#FFFFFF` | Text Secondary: `#7E8E9C`
 - **Light Mode**:
   - Main Background: `#F4F7F9`
   - Elevated Surface / Cards: `#FFFFFF`
@@ -212,6 +213,34 @@ Realtime: all 8 tables added to `supabase_realtime` publication.
     - `eas.json`: Created with `preview` profile (`"android": { "buildType": "apk" }`) for direct `.apk` downloads and `production` profile (`app-bundle` / `.ipa`).
   - **Zero Error Compilation**:
     - `npx tsc --noEmit` verified with **0 errors** across the entire codebase.
+- **[Phase 7 — 2026-10-15]**: Login Sanitization & Premium Dark Consumer UI/UX Overhaul.
+  - **Task 1: Fix Login Query & Input Sanitization**:
+    - `src/screens/LoginScreen.tsx`: Configured Username `TextInput` with `autoCapitalize="none"`, `autoCorrect={false}`, and `keyboardType="email-address"`. Added focused border state `rgba(0, 255, 204, 0.4)`.
+    - `src/context/AuthContext.tsx`:
+      - Sanitized inputs on login with `username.trim().toLowerCase()` and `password.trim()`.
+      - Replaced `.single()` with multi-row query `.select('*').eq('username', cleanUsername).eq('password_hash', cleanPassword)` to prevent PostgREST `PGRST116` errors on zero matches.
+      - Logged exact query lookup to console: `console.log('[Auth] User lookup result:', data, error)`.
+      - Added informative `Alert` handling for 0 rows returned: differentiates between a network/Supabase error and invalid/missing credentials.
+      - Sanitized inputs across fallback local storage login.
+  - **Task 2: Complete UI/UX Overhaul (Dark Consumer App)**:
+    - **Color & Surface Refinement**:
+      - Set background to deep slate-black `#050A0E`.
+      - Elevated card surfaces set to `#0D161F` with soft top hairline borders `borderColor: 'rgba(255, 255, 255, 0.07)'`, `borderWidth: 1`, and `borderRadius: 18`.
+      - Removed all harsh 2px solid neon borders across cards, badges, and inputs.
+    - **Typography & Hierarchy**:
+      - Bold headings with `letterSpacing: -0.4`, body text at 15px with line height 22px, and metadata/timestamps in `#7E8E9C` at 12px.
+      - Verified 100% of `fontWeight` attributes across the application are strict string values (`'600'`, `'700'`).
+    - **Buttons & Form Inputs**:
+      - Form inputs: sleek `#0A1017` surface, `borderRadius: 14`, padding 16px, placeholder `#4B5A68`, subtle focus border in `rgba(0, 255, 204, 0.4)`.
+      - Primary buttons: Pill shape (`borderRadius: 16`), vibrant `#00FFCC` background, deep dark text `#050A0E`, `fontWeight: '700'`, active opacity feedback.
+    - **Floating Modern Bottom Dock (`App.tsx`)**:
+      - Transformed bottom navigation into a sleek floating pill dock: `marginHorizontal: 16`, `marginBottom: 20` (24 on iOS), `borderRadius: 24`, `backgroundColor: '#0D161F'`, hairline border.
+      - Active tab highlighted with a soft cyan badge (`rgba(0, 255, 204, 0.12)`), pill shape `borderRadius: 18`, and active cyan dot indicator (`width: 4, height: 4, borderRadius: 2`).
+    - **Feed & Card Aesthetics (`PostsScreen.tsx`)**:
+      - Pinned Announcements: styled with warm, subtle amber glow (`rgba(255, 102, 0, 0.06)` background, `rgba(255, 102, 0, 0.25)` border, subtle amber shadow) and crisp `#FF6600` accent tags instead of flat orange boxes.
+      - Post Cards: generous internal padding (16px), subtle dividers, rounded corners (`borderRadius: 18`).
+  - **Zero Error TypeScript Verification**:
+    - `npx tsc --noEmit` verified with **0 errors**.
 
 ## 6. Build & Native Compilation Instructions
 - **Local Dev Server**:

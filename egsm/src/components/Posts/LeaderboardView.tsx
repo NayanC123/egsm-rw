@@ -455,7 +455,7 @@ const createStyles = (
     // ── Layout ──────────────────────────────────────────────
     container: {
       flex: 1,
-      backgroundColor: c.mainBackground,
+      backgroundColor: '#050A0E',
     },
 
     // ── Top navigation bar ───────────────────────────────────
@@ -466,8 +466,8 @@ const createStyles = (
       paddingHorizontal: 16,
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: c.border,
-      backgroundColor: c.surface,
+      borderBottomColor: 'rgba(255, 255, 255, 0.07)',
+      backgroundColor: isDark ? '#0D161F' : c.surface,
     },
     topBackBtn: {
       paddingVertical: 4,
@@ -475,13 +475,14 @@ const createStyles = (
       minWidth: 80,
     },
     topBackText: {
-      color: c.primary,
+      color: '#00FFCC',
       fontSize: 15,
       fontWeight: '600',
     },
     topTitle: {
       fontSize: 18,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
     },
     topRightPlaceholder: {
@@ -490,10 +491,10 @@ const createStyles = (
 
     // ── Header card ──────────────────────────────────────────
     headerCard: {
-      backgroundColor: isDark ? '#0D1E2A' : '#F0F8FF',
-      borderColor: '#00FFCC',
-      borderWidth: 1.5,
-      borderRadius: 14,
+      backgroundColor: '#0D161F',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
+      borderWidth: 1,
+      borderRadius: 18,
       padding: 18,
       marginBottom: 20,
     },
@@ -504,23 +505,24 @@ const createStyles = (
       marginBottom: 10,
     },
     headerTitle: {
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: '700',
+      letterSpacing: -0.4,
       color: c.textPrimary,
     },
     liveDot: {
-      borderRadius: 10,
+      borderRadius: 12,
       paddingHorizontal: 8,
       paddingVertical: 3,
     },
     liveDotActive: {
-      backgroundColor: '#00FFCC22',
-      borderColor: '#00FFCC',
+      backgroundColor: 'rgba(0, 255, 204, 0.1)',
+      borderColor: 'rgba(0, 255, 204, 0.3)',
       borderWidth: 1,
     },
     liveDotInactive: {
-      backgroundColor: isDark ? '#1A2C38' : '#E8EFF5',
-      borderColor: c.border,
+      backgroundColor: isDark ? '#0A1017' : '#E8EFF5',
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       borderWidth: 1,
     },
     liveDotText: {
@@ -536,12 +538,12 @@ const createStyles = (
     },
     headerSubRule: {
       fontSize: 12,
-      color: c.textSecondary,
+      color: '#7E8E9C',
       lineHeight: 18,
     },
     lastUpdatedText: {
-      fontSize: 11,
-      color: c.textSecondary,
+      fontSize: 12,
+      color: '#7E8E9C',
       marginTop: 8,
       fontStyle: 'italic',
     },
@@ -556,27 +558,27 @@ const createStyles = (
     rankRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: c.surface,
-      borderRadius: 14,
+      backgroundColor: '#0D161F',
+      borderRadius: 18,
       borderWidth: 1,
-      borderColor: c.border,
-      padding: 14,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
+      padding: 16,
       marginBottom: 12,
     },
     rankRowTop3: {
-      borderWidth: 1.5,
+      borderWidth: 1,
     },
     rankRow1: {
-      borderColor: '#00FFCC',
-      backgroundColor: isDark ? '#071B18' : '#EAFFF9',
+      borderColor: 'rgba(0, 255, 204, 0.3)',
+      backgroundColor: isDark ? 'rgba(0, 255, 204, 0.04)' : '#EAFFF9',
     },
     rankRow2: {
-      borderColor: '#FF6600',
-      backgroundColor: isDark ? '#1C100A' : '#FFF5EE',
+      borderColor: 'rgba(255, 102, 0, 0.3)',
+      backgroundColor: isDark ? 'rgba(255, 102, 0, 0.04)' : '#FFF5EE',
     },
     rankRow3: {
-      borderColor: '#FFB800',
-      backgroundColor: isDark ? '#1C1609' : '#FFFAEE',
+      borderColor: 'rgba(255, 184, 0, 0.3)',
+      backgroundColor: isDark ? 'rgba(255, 184, 0, 0.04)' : '#FFFAEE',
     },
 
     // ── Rank Badge ───────────────────────────────────────────
@@ -584,11 +586,11 @@ const createStyles = (
       width: 52,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1.5,
-      borderRadius: 10,
+      borderWidth: 1,
+      borderRadius: 12,
       paddingVertical: 8,
       marginRight: 14,
-      backgroundColor: isDark ? '#050A0E' : '#F4F7F9',
+      backgroundColor: isDark ? '#0A1017' : '#F4F7F9',
     },
     rankNumText: {
       fontSize: 16,
@@ -708,10 +710,10 @@ const createStyles = (
       borderTopColor: c.border,
     },
     backMainBtn: {
-      backgroundColor: isDark ? '#0D161E' : '#F0F4F8',
-      borderColor: c.primary,
-      borderWidth: 1.5,
-      borderRadius: 10,
+      backgroundColor: isDark ? '#0D161F' : '#F0F4F8',
+      borderColor: isDark ? 'rgba(0, 255, 204, 0.5)' : c.primary,
+      borderWidth: 1,
+      borderRadius: 16,
       paddingVertical: 14,
       alignItems: 'center',
       justifyContent: 'center',

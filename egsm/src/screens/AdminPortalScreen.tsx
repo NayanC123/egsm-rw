@@ -828,7 +828,7 @@ export const AdminPortalScreen: React.FC = () => {
               key={post.id}
               style={[
                 s.postCard,
-                isAnnounce && { borderColor: '#FF6600', borderWidth: 1.5, backgroundColor: isDark ? '#14120F' : '#FFF9F5' },
+                isAnnounce && { borderColor: 'rgba(255, 102, 0, 0.35)', borderWidth: 1, backgroundColor: isDark ? 'rgba(255, 102, 0, 0.06)' : '#FFF9F5' },
               ]}
             >
               {isAnnounce && (

@@ -30,6 +30,7 @@ const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   // Account lock modal state (suspended or terminated)
   const [lockModal, setLockModal] = useState<{
@@ -57,7 +58,7 @@ const LoginScreen: React.FC = () => {
       return;
     }
 
-    const result = await login(username.trim(), password);
+    const result = await login(username.trim(), password.trim());
     if (!result.success) {
       if (result.blockedStatus) {
         setLockModal({
@@ -128,15 +129,21 @@ const LoginScreen: React.FC = () => {
             <Text style={s.label}>Username</Text>
             <TextInput
               id="login-username"
-              style={s.input}
+              style={[
+                s.input,
+                focusedInput === 'username' && s.inputFocused,
+              ]}
               value={username}
               onChangeText={(text) => {
                 setUsername(text);
                 if (error) setError(null);
               }}
+              onFocus={() => setFocusedInput('username')}
+              onBlur={() => setFocusedInput(null)}
               autoCapitalize="none"
               autoCorrect={false}
-              placeholderTextColor={colors.textSecondary}
+              keyboardType="email-address"
+              placeholderTextColor="#4B5A68"
               placeholder="e.g. jdoe or admin"
             />
 
@@ -155,14 +162,19 @@ const LoginScreen: React.FC = () => {
             </View>
             <TextInput
               id="login-password"
-              style={s.input}
+              style={[
+                s.input,
+                focusedInput === 'password' && s.inputFocused,
+              ]}
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
                 if (error) setError(null);
               }}
+              onFocus={() => setFocusedInput('password')}
+              onBlur={() => setFocusedInput(null)}
               secureTextEntry={!showPassword}
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor="#4B5A68"
               placeholder="Enter your password"
             />
 
@@ -180,7 +192,7 @@ const LoginScreen: React.FC = () => {
               style={[s.primaryBtn, isLoading && s.btnDisabled]}
               onPress={handleLogin}
               disabled={isLoading}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
             >
               {isLoading ? (
                 <ActivityIndicator color="#050A0E" size="small" />
@@ -236,13 +248,13 @@ const LoginScreen: React.FC = () => {
                   </View>
                   <Text style={s.modalSuccessTitle}>Request Submitted</Text>
                   <Text style={s.modalSuccessMessage}>
-                    Request sent to Administrators. An Admin will reset your password shortly.
+                    Request sent to Administrators. An Admin will review and reset your credentials shortly.
                   </Text>
                   <TouchableOpacity
                     id="forgot-success-close-btn"
                     style={s.modalPrimaryBtn}
                     onPress={() => setShowForgotModal(false)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.75}
                   >
                     <Text style={s.modalPrimaryBtnText}>Close</Text>
                   </TouchableOpacity>
@@ -267,24 +279,36 @@ const LoginScreen: React.FC = () => {
                   <Text style={s.label}>Your Username</Text>
                   <TextInput
                     id="forgot-username"
-                    style={s.input}
+                    style={[
+                      s.input,
+                      focusedInput === 'forgot-username' && s.inputFocused,
+                    ]}
                     value={forgotUsername}
                     onChangeText={setForgotUsername}
+                    onFocus={() => setFocusedInput('forgot-username')}
+                    onBlur={() => setFocusedInput(null)}
                     autoCapitalize="none"
                     autoCorrect={false}
-                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="email-address"
+                    placeholderTextColor="#4B5A68"
                     placeholder="Enter registered username"
                   />
 
                   <Text style={s.label}>Optional Note for Administrators</Text>
                   <TextInput
                     id="forgot-note"
-                    style={[s.input, s.multilineInput]}
+                    style={[
+                      s.input,
+                      s.multilineInput,
+                      focusedInput === 'forgot-note' && s.inputFocused,
+                    ]}
                     value={forgotNote}
                     onChangeText={setForgotNote}
+                    onFocus={() => setFocusedInput('forgot-note')}
+                    onBlur={() => setFocusedInput(null)}
                     multiline
                     numberOfLines={3}
-                    placeholderTextColor={colors.textSecondary}
+                    placeholderTextColor="#4B5A68"
                     placeholder="e.g. Lost access after device reset..."
                   />
 
@@ -298,6 +322,7 @@ const LoginScreen: React.FC = () => {
                       style={s.modalCancelBtn}
                       onPress={() => setShowForgotModal(false)}
                       disabled={forgotLoading}
+                      activeOpacity={0.75}
                     >
                       <Text style={s.modalCancelBtnText}>Cancel</Text>
                     </TouchableOpacity>
@@ -307,7 +332,7 @@ const LoginScreen: React.FC = () => {
                       style={[s.modalSubmitBtn, forgotLoading && s.btnDisabled]}
                       onPress={handleForgotSubmit}
                       disabled={forgotLoading}
-                      activeOpacity={0.8}
+                      activeOpacity={0.75}
                     >
                       {forgotLoading ? (
                         <ActivityIndicator color="#050A0E" size="small" />
@@ -344,7 +369,7 @@ const styles = (
   StyleSheet.create({
     safe: {
       flex: 1,
-      backgroundColor: c.mainBackground,
+      backgroundColor: '#050A0E',
     },
     flex: {
       flex: 1,
@@ -360,44 +385,45 @@ const styles = (
       marginBottom: 28,
     },
     badgeBox: {
-      backgroundColor: isDark ? '#0D161E' : '#FFFFFF',
-      borderWidth: 1.5,
-      borderColor: c.primary,
+      backgroundColor: 'rgba(0, 255, 204, 0.08)',
+      borderWidth: 1,
+      borderColor: 'rgba(0, 255, 204, 0.25)',
       paddingHorizontal: 16,
       paddingVertical: 6,
-      borderRadius: 12,
+      borderRadius: 20,
       marginBottom: 12,
     },
     badgeText: {
-      color: c.primary,
-      fontSize: 16,
+      color: '#00FFCC',
+      fontSize: 14,
       fontWeight: '700',
       letterSpacing: 2,
     },
     title: {
       fontSize: 32,
       fontWeight: '700',
-      color: c.textPrimary,
-      letterSpacing: 1,
+      color: '#FFFFFF',
+      letterSpacing: -0.4,
       marginBottom: 4,
     },
     subtitle: {
       fontSize: 13,
-      color: c.textSecondary,
+      color: '#7E8E9C',
       fontWeight: '500',
     },
     card: {
-      backgroundColor: c.surface,
+      backgroundColor: '#0D161F',
       borderRadius: 18,
       padding: 24,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
       marginBottom: 20,
     },
     cardHeading: {
-      fontSize: 20,
+      fontSize: 22,
       fontWeight: '700',
-      color: c.textPrimary,
+      color: '#FFFFFF',
+      letterSpacing: -0.4,
       marginBottom: 20,
     },
     labelRow: {
@@ -408,7 +434,7 @@ const styles = (
     label: {
       fontSize: 12,
       fontWeight: '600',
-      color: c.textSecondary,
+      color: '#7E8E9C',
       marginBottom: 8,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
@@ -416,22 +442,26 @@ const styles = (
     showToggle: {
       fontSize: 12,
       fontWeight: '600',
-      color: c.primary,
+      color: '#00FFCC',
       marginBottom: 8,
     },
     input: {
-      backgroundColor: c.mainBackground,
+      backgroundColor: isDark ? '#0A1017' : '#F0F4F8',
       borderWidth: 1,
-      borderColor: c.border,
-      borderRadius: 12,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
+      borderRadius: 14,
       paddingHorizontal: 16,
-      paddingVertical: 14,
-      color: c.textPrimary,
+      paddingVertical: 16,
+      color: '#FFFFFF',
       fontSize: 15,
+      lineHeight: 22,
       marginBottom: 18,
     },
+    inputFocused: {
+      borderColor: 'rgba(0, 255, 204, 0.4)',
+    },
     multilineInput: {
-      height: 80,
+      height: 90,
       textAlignVertical: 'top',
     },
     errorContainer: {
@@ -440,7 +470,7 @@ const styles = (
       backgroundColor: 'rgba(255, 51, 102, 0.1)',
       borderWidth: 1,
       borderColor: c.danger,
-      borderRadius: 10,
+      borderRadius: 12,
       padding: 12,
       marginBottom: 16,
     },
@@ -453,20 +483,21 @@ const styles = (
       color: c.danger,
       fontSize: 13,
       fontWeight: '500',
+      lineHeight: 18,
     },
     primaryBtn: {
       backgroundColor: '#00FFCC',
-      borderRadius: 12,
-      paddingVertical: 15,
+      borderRadius: 16,
+      paddingVertical: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 4,
+      marginTop: 6,
     },
     primaryBtnText: {
       color: '#050A0E',
       fontSize: 15,
       fontWeight: '700',
-      letterSpacing: 1,
+      letterSpacing: 0.8,
     },
     btnDisabled: {
       opacity: 0.6,
@@ -474,10 +505,10 @@ const styles = (
     forgotBtn: {
       alignItems: 'center',
       marginTop: 18,
-      paddingVertical: 4,
+      paddingVertical: 6,
     },
     forgotText: {
-      color: c.primary,
+      color: '#00FFCC',
       fontSize: 13,
       fontWeight: '600',
     },
@@ -486,20 +517,20 @@ const styles = (
       alignItems: 'center',
       backgroundColor: isDark ? 'rgba(255, 102, 0, 0.08)' : 'rgba(255, 102, 0, 0.06)',
       borderWidth: 1,
-      borderColor: c.accent,
-      borderRadius: 14,
+      borderColor: 'rgba(255, 102, 0, 0.25)',
+      borderRadius: 16,
       padding: 16,
     },
     inviteIconBox: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: isDark ? '#0D161E' : '#FFFFFF',
+      backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 14,
       borderWidth: 1,
-      borderColor: c.accent,
+      borderColor: 'rgba(255, 102, 0, 0.3)',
     },
     inviteIcon: {
       fontSize: 18,
@@ -515,14 +546,14 @@ const styles = (
     },
     inviteBody: {
       fontSize: 12,
-      color: c.textSecondary,
-      lineHeight: 17,
+      color: '#7E8E9C',
+      lineHeight: 18,
       fontWeight: '500',
     },
     // Dedicated Modal Styles
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(5, 10, 14, 0.85)',
+      backgroundColor: 'rgba(5, 10, 14, 0.88)',
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
@@ -532,11 +563,11 @@ const styles = (
       maxWidth: 440,
     },
     modalCard: {
-      backgroundColor: c.surface,
+      backgroundColor: '#0D161F',
       borderRadius: 20,
       padding: 24,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
     },
     modalHeader: {
       flexDirection: 'row',
@@ -545,22 +576,23 @@ const styles = (
       marginBottom: 12,
     },
     modalTitle: {
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: '700',
-      color: c.textPrimary,
+      letterSpacing: -0.4,
+      color: '#FFFFFF',
     },
     modalCloseBtn: {
       padding: 4,
     },
     modalCloseText: {
-      color: c.textSecondary,
+      color: '#7E8E9C',
       fontSize: 18,
       fontWeight: '700',
     },
     modalDescription: {
       fontSize: 13,
-      color: c.textSecondary,
-      lineHeight: 18,
+      color: '#7E8E9C',
+      lineHeight: 19,
       marginBottom: 20,
     },
     modalErrorText: {
@@ -573,27 +605,27 @@ const styles = (
     modalBtnRow: {
       flexDirection: 'row',
       gap: 12,
-      marginTop: 6,
+      marginTop: 8,
     },
     modalCancelBtn: {
       flex: 1,
-      backgroundColor: c.mainBackground,
+      backgroundColor: isDark ? '#0A1017' : '#F0F4F8',
       borderWidth: 1,
-      borderColor: c.border,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderColor: 'rgba(255, 255, 255, 0.07)',
+      borderRadius: 16,
+      paddingVertical: 15,
       alignItems: 'center',
     },
     modalCancelBtnText: {
-      color: c.textSecondary,
+      color: '#7E8E9C',
       fontWeight: '600',
       fontSize: 14,
     },
     modalSubmitBtn: {
       flex: 1.5,
       backgroundColor: c.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: 16,
+      paddingVertical: 15,
       alignItems: 'center',
     },
     modalSubmitBtnText: {
@@ -609,9 +641,9 @@ const styles = (
       width: 56,
       height: 56,
       borderRadius: 28,
-      backgroundColor: 'rgba(0, 255, 204, 0.15)',
-      borderWidth: 2,
-      borderColor: '#00FFCC',
+      backgroundColor: 'rgba(0, 255, 204, 0.12)',
+      borderWidth: 1,
+      borderColor: 'rgba(0, 255, 204, 0.3)',
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 16,
@@ -624,22 +656,23 @@ const styles = (
     modalSuccessTitle: {
       fontSize: 18,
       fontWeight: '700',
-      color: c.textPrimary,
+      letterSpacing: -0.4,
+      color: '#FFFFFF',
       marginBottom: 8,
     },
     modalSuccessMessage: {
       fontSize: 14,
-      color: c.textSecondary,
+      color: '#7E8E9C',
       textAlign: 'center',
-      lineHeight: 20,
+      lineHeight: 21,
       marginBottom: 24,
       paddingHorizontal: 8,
     },
     modalPrimaryBtn: {
       backgroundColor: '#00FFCC',
       width: '100%',
-      paddingVertical: 14,
-      borderRadius: 12,
+      paddingVertical: 15,
+      borderRadius: 16,
       alignItems: 'center',
     },
     modalPrimaryBtnText: {
