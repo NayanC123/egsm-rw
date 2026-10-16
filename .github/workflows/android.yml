@@ -1,7 +1,7 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch: # Lets you click "Run workflow" manually on GitHub
+  workflow_dispatch:
   push:
     branches: [ main ]
 
@@ -25,15 +25,21 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          api-level: 33
+          build-tools: 33.0.2
+          components: |
+            platform-tools
+            platforms;android-33
+            build-tools;33.0.2
+            cmdline-tools;latest
 
-      - name: Ensure Android SDK components
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      - name: Ensure SDK components & accept licenses
         run: |
-          SDKMANAGER=$(find "$ANDROID_SDK_ROOT" -type f -name sdkmanager | head -n1)
-          echo "Using sdkmanager: $SDKMANAGER"
-          # Replace android-33 / 33.0.2 with the API level / build-tools that match your project (compileSdkVersion)
-          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" "cmdline-tools;latest" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          export ANDROID_SDK_ROOT=${{ env.ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk }}
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest" || true
+          yes | sdkmanager --licenses
 
       - name: Install dependencies
         run: npm install
