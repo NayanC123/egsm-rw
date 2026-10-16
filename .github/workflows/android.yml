@@ -30,13 +30,6 @@ jobs:
           build-tools: 33.0.2
           components: platform-tools,build-tools;33.0.2,platforms;android-33,cmdline-tools;latest
 
-      - name: Ensure SDK components & accept licenses
-        run: |
-          export ANDROID_SDK_ROOT=${{ env.ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk }}
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
-          sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.2" "cmdline-tools;latest" || true
-          yes | sdkmanager --licenses
-
       - name: Install dependencies
         run: npm install
 
