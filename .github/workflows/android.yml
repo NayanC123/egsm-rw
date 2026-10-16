@@ -25,19 +25,14 @@ jobs:
 
       - name: Setup Android SDK manually
         run: |
-          # Set up environment variables
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
           
-          # Create directories
           mkdir -p $HOME/android-sdk/cmdline-tools
           
-          # Download command-line tools (latest version)
           CD_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
           curl -sSL $CD_TOOLS_URL -o cmdline-tools.zip
-          
-          # Extract and structure correctly (cmdline-tools must be inside a 'latest' folder)
           unzip -q cmdline-tools.zip -d $HOME/android-sdk/cmdline-tools
           mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
           rm cmdline-tools.zip
@@ -47,10 +42,7 @@ jobs:
           export ANDROID_SDK_ROOT=$HOME/android-sdk
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
           
-          # Accept licenses automatically
           yes | sdkmanager --licenses || true
-          
-          # Install required components for Expo/Gradle
           sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
       - name: Install dependencies
