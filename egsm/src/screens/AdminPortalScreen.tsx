@@ -21,6 +21,7 @@ import {
   ActivityIndicator,
   Platform,
   BackHandler,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useTheme } from '../context/ThemeContext';
@@ -1311,7 +1312,7 @@ export const AdminPortalScreen: React.FC = () => {
   // MAIN RETURN
   // ─────────────────────────────────────────────────────────────
   return (
-    <View style={s.screenContainer}>
+    <KeyboardAvoidingView style={s.screenContainer} behavior="padding">
       {/* Portal Top Header Bar */}
       <View style={s.topBar}>
         <View style={s.topBarLeft}>
@@ -1401,7 +1402,7 @@ export const AdminPortalScreen: React.FC = () => {
       {renderSuspendModal()}
       {renderResetPasswordModal()}
       {renderResolveRequestModal()}
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 

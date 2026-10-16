@@ -19,6 +19,7 @@ import {
   RefreshControl,
   Platform,
   BackHandler,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useTheme } from '../context/ThemeContext';
@@ -36,6 +37,7 @@ import type { DocumentAttachment } from '../types/database';
 import LeaderboardView from '../components/Posts/LeaderboardView';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { uploadFileToSupabase } from '../services/storageService';
 
 type PostsPageState = 'feed' | 'detail' | 'create' | 'leaderboard';
 
@@ -94,6 +96,7 @@ const PostsScreen: React.FC = () => {
   const [attachedImages, setAttachedImages] = useState<string[]>([]);
   const [attachedDocs, setAttachedDocs] = useState<DocumentAttachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
 
   // Attachment Picker Modals
   const [imageModalVisible, setImageModalVisible] = useState<boolean>(false);
@@ -345,7 +348,22 @@ const PostsScreen: React.FC = () => {
         quality: 0.8,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        addImageAttachment(result.assets[0].uri);
+        const asset = result.assets[0];
+        setIsUploading(true);
+        try {
+          const publicUrl = await uploadFileToSupabase(
+            asset.uri,
+            asset.fileName || 'post_image.jpg',
+            asset.mimeType || 'image/jpeg',
+            'post-attachments'
+          );
+          addImageAttachment(publicUrl);
+          setImageModalVisible(false);
+        } catch (uploadErr: any) {
+          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload image.');
+        } finally {
+          setIsUploading(false);
+        }
       }
     } catch (err: any) {
       console.warn('[PostsScreen ImagePicker Error]:', err);
@@ -368,7 +386,22 @@ const PostsScreen: React.FC = () => {
         quality: 0.8,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        addImageAttachment(result.assets[0].uri);
+        const asset = result.assets[0];
+        setIsUploading(true);
+        try {
+          const publicUrl = await uploadFileToSupabase(
+            asset.uri,
+            asset.fileName || 'camera_photo.jpg',
+            asset.mimeType || 'image/jpeg',
+            'post-attachments'
+          );
+          addImageAttachment(publicUrl);
+          setImageModalVisible(false);
+        } catch (uploadErr: any) {
+          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload photo.');
+        } finally {
+          setIsUploading(false);
+        }
       }
     } catch (err: any) {
       console.warn('[PostsScreen Camera Error]:', err);
@@ -384,12 +417,26 @@ const PostsScreen: React.FC = () => {
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        addDocumentAttachment({
-          name: asset.name || 'document.bin',
-          url: asset.uri,
-          mimeType: asset.mimeType || 'application/octet-stream',
-          size: asset.size || 0,
-        });
+        setIsUploading(true);
+        try {
+          const publicUrl = await uploadFileToSupabase(
+            asset.uri,
+            asset.name || 'document.bin',
+            asset.mimeType || 'application/octet-stream',
+            'post-attachments'
+          );
+          addDocumentAttachment({
+            name: asset.name || 'document.bin',
+            url: publicUrl,
+            mimeType: asset.mimeType || 'application/octet-stream',
+            size: asset.size || 0,
+          });
+          setDocModalVisible(false);
+        } catch (uploadErr: any) {
+          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload document.');
+        } finally {
+          setIsUploading(false);
+        }
       }
     } catch (err: any) {
       console.warn('[PostsScreen DocumentPicker Error]:', err);
@@ -579,7 +626,7 @@ const PostsScreen: React.FC = () => {
 
   const renderCreate = () => {
     return (
-      <View style={s.container}>
+      <KeyboardAvoidingView style={s.container} behavior="padding">
         {/* Top bar with (<- Cancel) and title */}
         <View style={s.topHeader}>
           <TouchableOpacity
@@ -664,6 +711,14 @@ const PostsScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Uploading Indicator Banner */}
+          {isUploading && (
+            <View style={s.uploadingBanner}>
+              <ActivityIndicator color={colors.primary} size="small" style={{ marginRight: 8 }} />
+              <Text style={s.uploadingText}>Uploading attachment to Supabase Storage ('post-attachments')...</Text>
+            </View>
+          )}
 
           {/* Attached Images Preview (Removable Thumbnails) */}
           {attachedImages.length > 0 && (
@@ -750,6 +805,13 @@ const PostsScreen: React.FC = () => {
                 Select an image from your device or enter a direct image URL:
               </Text>
 
+              {isUploading && (
+                <View style={s.modalUploadingBox}>
+                  <ActivityIndicator color={colors.primary} size="small" style={{ marginRight: 8 }} />
+                  <Text style={s.modalUploadingText}>Uploading to Supabase Storage...</Text>
+                </View>
+              )}
+
               {/* Native Device Pickers */}
               <TouchableOpacity
                 id="btn-native-camera"
@@ -811,6 +873,13 @@ const PostsScreen: React.FC = () => {
                 Select a document from your device storage or enter a download URL:
               </Text>
 
+              {isUploading && (
+                <View style={s.modalUploadingBox}>
+                  <ActivityIndicator color={colors.primary} size="small" style={{ marginRight: 8 }} />
+                  <Text style={s.modalUploadingText}>Uploading to Supabase Storage...</Text>
+                </View>
+              )}
+
               {/* Native Document Picker */}
               <TouchableOpacity
                 id="btn-native-document-picker"
@@ -868,7 +937,7 @@ const PostsScreen: React.FC = () => {
             </View>
           </View>
         </Modal>
-      </View>
+      </KeyboardAvoidingView>
     );
   };
 
@@ -2132,6 +2201,40 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: '#7E8E9C',
       textAlign: 'center',
       lineHeight: 18,
+    },
+    uploadingBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      backgroundColor: c.surface,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.primary,
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    uploadingText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.primary,
+    },
+    modalUploadingBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 12,
+      backgroundColor: isDark ? '#072E27' : '#E6F4F1',
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.primary,
+      marginVertical: 10,
+    },
+    modalUploadingText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: c.primary,
     },
   });
 

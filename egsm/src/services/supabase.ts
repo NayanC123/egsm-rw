@@ -25,8 +25,10 @@ const isValidUrl = (s: string): boolean => {
 const isValidKey = (s: string): boolean => Boolean(s && s.length > 20);
 
 // Use environment variables when valid, otherwise use the live project fallback credentials
-const supabaseUrl = isValidUrl(rawUrl) ? rawUrl : FALLBACK_URL;
-const supabaseAnonKey = isValidKey(rawKey) ? rawKey : FALLBACK_KEY;
+export const SUPABASE_URL: string = isValidUrl(rawUrl) ? rawUrl : FALLBACK_URL;
+export const SUPABASE_ANON_KEY: string = isValidKey(rawKey) ? rawKey : FALLBACK_KEY;
+const supabaseUrl = SUPABASE_URL;
+const supabaseAnonKey = SUPABASE_ANON_KEY;
 
 /**
  * True when the effective Supabase credentials are valid and live.

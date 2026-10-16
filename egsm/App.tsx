@@ -15,6 +15,7 @@ import {
   StyleSheet,
   Platform,
   BackHandler,
+  Keyboard,
 } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 
@@ -111,6 +112,20 @@ const AppShell: React.FC = () => {
   const { colors, isDark } = useTheme();
 
   const [activeTab, setActiveTab] = React.useState<TabId>('chat');
+  const [isKeyboardVisible, setIsKeyboardVisible] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const visibleTabs = TABS.filter((t) => !t.adminOnly || user?.role === 'admin');
 
@@ -144,40 +159,42 @@ const AppShell: React.FC = () => {
       {/* Content area */}
       <View style={s.content}>{renderScreen()}</View>
 
-      {/* Floating Modern Bottom Dock */}
-      <View style={s.dockContainer}>
-        <View style={s.floatingDock}>
-          {visibleTabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                id={`tab-${tab.id}`}
-                style={[s.dockItem, isActive && s.dockItemActive]}
-                onPress={() => setActiveTab(tab.id)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={`${tab.label} tab`}
-              >
-                <Text style={[s.dockEmoji, isActive && s.dockEmojiActive]}>
-                  {tab.emoji}
-                </Text>
-                <Text
-                  style={[
-                    s.dockLabel,
-                    { color: isActive ? '#00FFCC' : '#7E8E9C' },
-                    isActive && s.dockLabelActive,
-                  ]}
-                  numberOfLines={1}
+      {/* Floating Modern Bottom Dock — Hidden when software keyboard is visible */}
+      {!isKeyboardVisible && (
+        <View style={s.dockContainer}>
+          <View style={s.floatingDock}>
+            {visibleTabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  id={`tab-${tab.id}`}
+                  style={[s.dockItem, isActive && s.dockItemActive]}
+                  onPress={() => setActiveTab(tab.id)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${tab.label} tab`}
                 >
-                  {tab.label}
-                </Text>
-                {isActive && <View style={s.activeDot} />}
-              </TouchableOpacity>
-            );
-          })}
+                  <Text style={[s.dockEmoji, isActive && s.dockEmojiActive]}>
+                    {tab.emoji}
+                  </Text>
+                  <Text
+                    style={[
+                      s.dockLabel,
+                      { color: isActive ? '#00FFCC' : '#7E8E9C' },
+                      isActive && s.dockLabelActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  {isActive && <View style={s.activeDot} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
-      </View>
+      )}
 
       <ExpoStatusBar style={isDark ? 'light' : 'dark'} />
     </SafeAreaView>

@@ -5,6 +5,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
     "expo": "~57.0.29",
+    "expo-av": "^16.0.8",
     "expo-document-picker": "~57.0.3",
     "expo-image-picker": "~57.0.20",
     "expo-status-bar": "~57.0.1",

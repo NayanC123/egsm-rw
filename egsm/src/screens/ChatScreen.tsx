@@ -19,6 +19,8 @@ import {
   Platform,
   StatusBar,
   BackHandler,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
@@ -42,6 +44,8 @@ import type {
 } from '../types/database';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { getNativeAudio, SafeVideo, SafeResizeMode } from '../services/audioVideoService';
+import { uploadFileToSupabase } from '../services/storageService';
 
 // ─────────────────────────────────────────────────────────────
 // Curated Presets for Offline / Fallback Media
@@ -168,15 +172,19 @@ const ChatScreen: React.FC = () => {
   const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
   const [customMediaName, setCustomMediaName] = useState<string>('');
 
-  // Voice Note Recording UI
+  // Voice Note Recording
   const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const recordingTimerRef = useRef<any>(null);
+  const recordingRef = useRef<any>(null);
 
-  // Voice Playback Simulation
+  // Voice Playback
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [playbackSeconds, setPlaybackSeconds] = useState<number>(0);
-  const playbackTimerRef = useRef<any>(null);
+  const soundRef = useRef<any>(null);
+
+  // Uploading State
+  const [isUploadingMedia, setIsUploadingMedia] = useState<boolean>(false);
 
   // Create Poll Modal
   const [isPollModalOpen, setIsPollModalOpen] = useState<boolean>(false);
@@ -244,6 +252,17 @@ const ChatScreen: React.FC = () => {
     isPollModalOpen,
   ]);
 
+  // Auto-scroll chat stream to latest message when keyboard pops up
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(showEvent, () => {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 80);
+    });
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
     loadMessages(false);
@@ -297,29 +316,14 @@ const ChatScreen: React.FC = () => {
     };
   }, [isRecordingVoice]);
 
-  // ─── Voice Playback Simulation Timer ───────────────────────
+  // ─── Voice Playback Cleanup ─────────────────────────────────
   useEffect(() => {
-    if (playingVoiceId) {
-      setPlaybackSeconds(0);
-      playbackTimerRef.current = setInterval(() => {
-        setPlaybackSeconds((prev) => {
-          const targetMsg = messages.find((m) => m.id === playingVoiceId);
-          const duration = targetMsg?.media_meta?.duration || 10;
-          if (prev + 1 >= duration) {
-            setPlayingVoiceId(null);
-            return 0;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    } else {
-      if (playbackTimerRef.current) clearInterval(playbackTimerRef.current);
-      setPlaybackSeconds(0);
-    }
     return () => {
-      if (playbackTimerRef.current) clearInterval(playbackTimerRef.current);
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+      }
     };
-  }, [playingVoiceId, messages]);
+  }, []);
 
   // ─── Giphy Query or Filter ─────────────────────────────────
   useEffect(() => {
@@ -507,20 +511,41 @@ const ChatScreen: React.FC = () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Camera permission is required to capture photos.');
+        Alert.alert('Permission Required', 'Camera permission is required to capture photos and videos.');
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
+        mediaTypes: ['images', 'videos'],
         quality: 0.8,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        handleSendMedia('photo', asset.uri, asset.fileName || 'camera_photo.jpg');
+        setIsUploadingMedia(true);
+        try {
+          const isVideo = asset.type === 'video';
+          const defaultName = isVideo ? 'camera_video.mp4' : 'camera_photo.jpg';
+          const mimeType = asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg');
+          const publicUrl = await uploadFileToSupabase(
+            asset.uri,
+            asset.fileName || defaultName,
+            mimeType,
+            'chat-media'
+          );
+          await handleSendMedia(
+            isVideo ? 'video' : 'photo',
+            publicUrl,
+            asset.fileName || defaultName,
+            asset.duration ? Math.round(asset.duration / 1000) : undefined
+          );
+        } catch (uploadErr: any) {
+          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload captured media.');
+        } finally {
+          setIsUploadingMedia(false);
+        }
       }
     } catch (err: any) {
       console.warn('[ChatScreen Camera Error]:', err);
-      Alert.alert('Camera Error', err?.message || 'Could not capture photo.');
+      Alert.alert('Camera Error', err?.message || 'Could not capture media.');
     }
   };
 
@@ -528,21 +553,41 @@ const ChatScreen: React.FC = () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Media library access is required to select photos.');
+        Alert.alert('Permission Required', 'Media library access is required to select photos and videos.');
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
+        mediaTypes: ['images', 'videos'],
         quality: 0.8,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        handleSendMedia('photo', asset.uri, asset.fileName || 'photo.jpg');
+        setIsUploadingMedia(true);
+        try {
+          const isVideo = asset.type === 'video';
+          const defaultName = isVideo ? 'gallery_video.mp4' : 'gallery_photo.jpg';
+          const mimeType = asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg');
+          const publicUrl = await uploadFileToSupabase(
+            asset.uri,
+            asset.fileName || defaultName,
+            mimeType,
+            'chat-media'
+          );
+          await handleSendMedia(
+            isVideo ? 'video' : 'photo',
+            publicUrl,
+            asset.fileName || defaultName,
+            asset.duration ? Math.round(asset.duration / 1000) : undefined
+          );
+        } catch (uploadErr: any) {
+          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload selected media.');
+        } finally {
+          setIsUploadingMedia(false);
+        }
       }
     } catch (err: any) {
       console.warn('[ChatScreen ImagePicker Error]:', err);
-      Alert.alert('Picker Error', err?.message || 'Could not select photo.');
+      Alert.alert('Picker Error', err?.message || 'Could not select media.');
     }
   };
 
@@ -555,17 +600,29 @@ const ChatScreen: React.FC = () => {
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['videos'],
-        allowsEditing: true,
         quality: 0.8,
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        handleSendMedia(
-          'video',
-          asset.uri,
-          asset.fileName || 'video.mp4',
-          asset.duration ? Math.round(asset.duration / 1000) : 15
-        );
+        setIsUploadingMedia(true);
+        try {
+          const publicUrl = await uploadFileToSupabase(
+            asset.uri,
+            asset.fileName || 'video.mp4',
+            asset.mimeType || 'video/mp4',
+            'chat-media'
+          );
+          await handleSendMedia(
+            'video',
+            publicUrl,
+            asset.fileName || 'video.mp4',
+            asset.duration ? Math.round(asset.duration / 1000) : 15
+          );
+        } catch (uploadErr: any) {
+          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload video.');
+        } finally {
+          setIsUploadingMedia(false);
+        }
       }
     } catch (err: any) {
       console.warn('[ChatScreen VideoPicker Error]:', err);
@@ -581,12 +638,25 @@ const ChatScreen: React.FC = () => {
       });
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        handleSendDocument({
-          name: asset.name || 'document.bin',
-          url: asset.uri,
-          mimeType: asset.mimeType || 'application/octet-stream',
-          size: asset.size || 0,
-        });
+        setIsUploadingMedia(true);
+        try {
+          const publicUrl = await uploadFileToSupabase(
+            asset.uri,
+            asset.name || 'document.bin',
+            asset.mimeType || 'application/octet-stream',
+            'chat-media'
+          );
+          await handleSendDocument({
+            name: asset.name || 'document.bin',
+            url: publicUrl,
+            mimeType: asset.mimeType || 'application/octet-stream',
+            size: asset.size || 0,
+          });
+        } catch (uploadErr: any) {
+          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload document.');
+        } finally {
+          setIsUploadingMedia(false);
+        }
       }
     } catch (err: any) {
       console.warn('[ChatScreen DocumentPicker Error]:', err);
@@ -594,17 +664,74 @@ const ChatScreen: React.FC = () => {
     }
   };
 
-  // Send Voice Note
+  // ── Voice Recording & Playback ──
+  const handleStartVoiceRecord = async () => {
+    if (spamLimiter.mediaLocked || spamLimiter.isInputLocked) return;
+
+    const Audio = getNativeAudio();
+    if (!Audio) {
+      Alert.alert(
+        'Voice Recording Unavailable',
+        'Voice recording requires the native ExponentAV module (not included in Expo Go). You can still attach and send audio files using the Document Picker (📎) or use a standalone build.'
+      );
+      return;
+    }
+
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Microphone permission is required to record voice notes.');
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = recording;
+      setIsRecordingVoice(true);
+    } catch (err: any) {
+      console.error('Failed to start recording:', err);
+      Alert.alert('Recording Error', err?.message || 'Could not start recording.');
+    }
+  };
+
+  const handleCancelVoiceRecord = async () => {
+    setIsRecordingVoice(false);
+    if (recordingRef.current) {
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+      } catch (err) {}
+      recordingRef.current = null;
+    }
+  };
+
   const handleSendVoiceNote = async () => {
     if (!user) return;
     const duration = Math.max(1, recordingSeconds);
     setIsRecordingVoice(false);
 
-    const dummyAudioUrl = 'https://actions.google.com/sounds/v1/ambiences/rain_heavy.ogg';
-    const allowed = spamLimiter.checkMessage('Voice Note', true);
-    if (!allowed) return;
+    const recording = recordingRef.current;
+    if (!recording) return;
 
     try {
+      setIsUploadingMedia(true);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      recordingRef.current = null;
+
+      if (!uri) {
+        throw new Error('Recording audio URI was not generated.');
+      }
+
+      const cleanFilename = `voice_${Date.now()}.m4a`;
+      const publicUrl = await uploadFileToSupabase(uri, cleanFilename, 'audio/m4a', 'chat-media');
+
+      const allowed = spamLimiter.checkMessage('Voice Note', true);
+      if (!allowed) return;
+
       const newMsg = await sendMessage({
         senderId: user.id,
         sender: {
@@ -614,17 +741,86 @@ const ChatScreen: React.FC = () => {
         },
         content: `Voice Message (${duration}s)`,
         messageType: 'voice',
-        mediaUrl: dummyAudioUrl,
+        mediaUrl: publicUrl,
         mediaMeta: {
           duration,
-          filename: `voice_note_${Date.now()}.m4a`,
+          filename: cleanFilename,
         },
       });
       spamLimiter.recordMediaSend();
       setMessages((prev) => [...prev, newMsg]);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    } catch (err) {
-      Alert.alert('Error', 'Failed to send voice note.');
+    } catch (err: any) {
+      console.error('Failed to send voice note:', err);
+      Alert.alert('Upload Error', err?.message || 'Failed to send voice note.');
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const handleTogglePlayVoice = async (msg: MessageWithSender) => {
+    if (!msg.media_url) return;
+
+    const Audio = getNativeAudio();
+    if (!Audio) {
+      // In Expo Go without ExponentAV, open the voice note URL directly so the user can listen to it
+      Linking.openURL(msg.media_url);
+      return;
+    }
+
+    if (playingVoiceId === msg.id) {
+      if (soundRef.current) {
+        try {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+        } catch (e) {}
+        soundRef.current = null;
+      }
+      setPlayingVoiceId(null);
+      setPlaybackSeconds(0);
+      return;
+    }
+
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+      } catch (e) {}
+      soundRef.current = null;
+    }
+
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: msg.media_url },
+        { shouldPlay: true }
+      );
+      soundRef.current = sound;
+      setPlayingVoiceId(msg.id);
+      setPlaybackSeconds(0);
+
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded) {
+          if (status.positionMillis) {
+            setPlaybackSeconds(Math.floor(status.positionMillis / 1000));
+          }
+          if (status.didJustFinish) {
+            setPlayingVoiceId(null);
+            setPlaybackSeconds(0);
+            sound.unloadAsync().catch(() => {});
+            soundRef.current = null;
+          }
+        }
+      });
+    } catch (err: any) {
+      console.error('Playback Error:', err);
+      Linking.openURL(msg.media_url);
+      setPlayingVoiceId(null);
+      setPlaybackSeconds(0);
     }
   };
 
@@ -952,43 +1148,33 @@ const ChatScreen: React.FC = () => {
                 </View>
               )}
 
-              {/* Type 4: Video Playback Card */}
+              {/* Type 4: Video Playback */}
               {item.message_type === 'video' && item.media_url && (
                 <View style={[styles.videoCard, { backgroundColor: isDark ? '#050A0E' : '#E8EFF5' }]}>
-                  <View style={styles.videoThumbnailSim}>
-                    <Text style={styles.videoPlayOverlay}>▶</Text>
-                  </View>
+                  <SafeVideo
+                    source={{ uri: item.media_url }}
+                    useNativeControls
+                    resizeMode={SafeResizeMode.CONTAIN}
+                    style={{ width: '100%', height: 160, backgroundColor: '#000000' }}
+                  />
                   <View style={styles.videoInfo}>
                     <Text style={[styles.videoTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {item.media_meta?.filename || 'video_stream.mp4'}
+                      {item.media_meta?.filename || 'video.mp4'}
                     </Text>
                     <Text style={[styles.videoDuration, { color: colors.textSecondary }]}>
-                      🎬 Video Recording • {item.media_meta?.duration || 15}s
+                      🎬 Video Recording {item.media_meta?.duration ? `• ${item.media_meta.duration}s` : ''}
                     </Text>
-                    <TouchableOpacity
-                      id={`play-vid-${item.id}`}
-                      style={[styles.videoOpenBtn, { backgroundColor: colors.primary }]}
-                      onPress={() => Linking.openURL(item.media_url!)}
-                    >
-                      <Text style={styles.videoOpenBtnText}>▶ Play Video</Text>
-                    </TouchableOpacity>
                   </View>
                 </View>
               )}
 
-              {/* Type 5: Voice Note with Inline Play/Pause Progress UI */}
+              {/* Type 5: Voice Note with Real Audio Play/Pause UI */}
               {item.message_type === 'voice' && (
                 <View style={[styles.voiceCard, { backgroundColor: isDark ? '#071017' : '#F1F5F8' }]}>
                   <TouchableOpacity
                     id={`play-voice-${item.id}`}
                     style={[styles.voicePlayBtn, { backgroundColor: colors.primary }]}
-                    onPress={() => {
-                      if (isPlayingThisVoice) {
-                        setPlayingVoiceId(null);
-                      } else {
-                        setPlayingVoiceId(item.id);
-                      }
-                    }}
+                    onPress={() => handleTogglePlayVoice(item)}
                   >
                     <Text style={styles.voicePlayIcon}>
                       {isPlayingThisVoice ? '⏸' : '▶'}
@@ -1075,7 +1261,11 @@ const ChatScreen: React.FC = () => {
   // ─────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.mainBackground }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.mainBackground }]}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+    >
       {/* ── Chat Header ── */}
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.headerTitleWrap}>
@@ -1219,6 +1409,8 @@ const ChatScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           renderItem={renderMessageItem}
           contentContainerStyle={styles.messagesList}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
@@ -1242,6 +1434,16 @@ const ChatScreen: React.FC = () => {
         </View>
       )}
 
+      {/* ── Media Uploading Indicator ── */}
+      {isUploadingMedia && (
+        <View style={[styles.uploadingMediaBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
+          <Text style={[styles.uploadingMediaText, { color: colors.primary }]}>
+            Uploading media to Supabase Storage...
+          </Text>
+        </View>
+      )}
+
       {/* ── Voice Recording Active Bar (replaces composer when recording) ── */}
       {isRecordingVoice ? (
         <View style={[styles.recordingBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
@@ -1257,7 +1459,7 @@ const ChatScreen: React.FC = () => {
             <TouchableOpacity
               id="cancel-voice-btn"
               style={[styles.recordingCancelBtn, { borderColor: colors.border }]}
-              onPress={() => setIsRecordingVoice(false)}
+              onPress={handleCancelVoiceRecord}
             >
               <Text style={[styles.recordingCancelText, { color: colors.textSecondary }]}>Cancel</Text>
             </TouchableOpacity>
@@ -1335,7 +1537,7 @@ const ChatScreen: React.FC = () => {
                 },
               ]}
               disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
-              onPress={() => setIsRecordingVoice(true)}
+              onPress={handleStartVoiceRecord}
             >
               <Text style={styles.toolIcon}>🎤</Text>
             </TouchableOpacity>
@@ -1496,7 +1698,7 @@ const ChatScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => setIsReportModalOpen(false)}
       >
-        <View style={styles.modalOverlayCenter}>
+        <KeyboardAvoidingView style={styles.modalOverlayCenter} behavior="padding">
           <View style={[styles.dialogCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.dialogHeader}>
               <Text style={[styles.dialogTitle, { color: colors.danger }]}>
@@ -1589,7 +1791,7 @@ const ChatScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 3. Giphy & Reaction GIF Search Modal */}
@@ -1724,6 +1926,14 @@ const ChatScreen: React.FC = () => {
           </View>
 
           <ScrollView style={styles.attachModalBody}>
+            {isUploadingMedia && (
+              <View style={[styles.modalUploadingBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
+                <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 10 }} />
+                <Text style={[styles.modalUploadingText, { color: colors.primary }]}>
+                  Uploading to Supabase Storage ('chat-media')...
+                </Text>
+              </View>
+            )}
             {/* TAB 1: Photo */}
             {attachTab === 'photo' && (
               <View style={styles.attachSection}>
@@ -1857,7 +2067,7 @@ const ChatScreen: React.FC = () => {
         animationType="slide"
         onRequestClose={() => setIsPollModalOpen(false)}
       >
-        <View style={styles.modalOverlayCenter}>
+        <KeyboardAvoidingView style={styles.modalOverlayCenter} behavior="padding">
           <View style={[styles.dialogCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.dialogHeader}>
               <Text style={[styles.dialogTitle, { color: colors.primary }]}>
@@ -1950,7 +2160,7 @@ const ChatScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 6. Full-Screen Image Zoom Modal */}
@@ -1976,7 +2186,7 @@ const ChatScreen: React.FC = () => {
           )}
         </View>
       </Modal>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -2997,6 +3207,32 @@ const styles = StyleSheet.create({
   zoomImage: {
     width: '94%',
     height: '75%',
+  },
+  uploadingMediaBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+  },
+  uploadingMediaText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modalUploadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  modalUploadingText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 
