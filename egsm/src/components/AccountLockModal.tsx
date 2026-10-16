@@ -13,6 +13,7 @@ import {
   StatusBar,
   ScrollView,
 } from 'react-native';
+import { TOP_SAFE_PADDING } from '../utils/layout';
 
 export interface AccountLockModalProps {
   visible: boolean;
@@ -210,6 +211,7 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: '#050A0E',
+    paddingTop: TOP_SAFE_PADDING,
   },
   scroll: {
     padding: 24,

@@ -17,7 +17,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  StatusBar,
+  BackHandler,
 } from 'react-native';
+import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useSpamLimiter } from '../hooks/useSpamLimiter';
@@ -70,25 +73,9 @@ const CURATED_GIFS: CuratedGif[] = [
   { id: 'g16', title: 'Groovy Dancing', url: 'https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif', category: 'Celebration' },
 ];
 
-const PHOTO_PRESETS = [
-  { label: 'Cluster Architecture Diagram', url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop&q=80', filename: 'cluster_topology.png' },
-  { label: 'Security & Encryption Node', url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80', filename: 'security_node.png' },
-  { label: 'Realtime Telemetry Dashboard', url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80', filename: 'telemetry_dashboard.png' },
-  { label: 'Network Mesh Infrastructure', url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80', filename: 'network_mesh.png' },
-];
-
-const VIDEO_PRESETS = [
-  { label: 'Validator Sync Telemetry Demo', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', filename: 'validator_sync.mp4', duration: 15 },
-  { label: 'Zero-Knowledge Proof Verification', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', filename: 'zk_verification.mp4', duration: 15 },
-  { label: 'Consensus Round Visualizer', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4', filename: 'consensus_round.mp4', duration: 15 },
-];
-
-const DOCUMENT_PRESETS: DocumentAttachment[] = [
-  { name: 'Validator_Runbook_v2.4.pdf', url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', mimeType: 'application/pdf', size: 2450000 },
-  { name: 'Consensus_Protocol_Whitepaper.pdf', url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', mimeType: 'application/pdf', size: 1845120 },
-  { name: 'Node_Telemetry_Audio.m4a', url: 'https://actions.google.com/sounds/v1/ambiences/rain_heavy.ogg', mimeType: 'audio/m4a', size: 3410500 },
-  { name: 'Security_Audit_Report_2026.docx', url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 924500 },
-];
+// ─────────────────────────────────────────────────────────────
+// Format Helpers
+// ─────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────
 // Format Helpers
@@ -215,6 +202,47 @@ const ChatScreen: React.FC = () => {
       }
     }
   }, []);
+
+  // Hardware Back Button listener: handle sub-modals and previews
+  useEffect(() => {
+    const onBackPress = () => {
+      if (zoomImageUrl !== null) {
+        setZoomImageUrl(null);
+        return true;
+      }
+      if (isActionModalOpen) {
+        setIsActionModalOpen(false);
+        return true;
+      }
+      if (isReportModalOpen) {
+        setIsReportModalOpen(false);
+        return true;
+      }
+      if (isGifModalOpen) {
+        setIsGifModalOpen(false);
+        return true;
+      }
+      if (isAttachModalOpen) {
+        setIsAttachModalOpen(false);
+        return true;
+      }
+      if (isPollModalOpen) {
+        setIsPollModalOpen(false);
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [
+    zoomImageUrl,
+    isActionModalOpen,
+    isReportModalOpen,
+    isGifModalOpen,
+    isAttachModalOpen,
+    isPollModalOpen,
+  ]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -354,6 +382,11 @@ const ChatScreen: React.FC = () => {
     try {
       const newMsg = await sendMessage({
         senderId: user.id,
+        sender: {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+        },
         content: text,
         messageType: 'text',
       });
@@ -377,6 +410,11 @@ const ChatScreen: React.FC = () => {
     try {
       const newMsg = await sendMessage({
         senderId: user.id,
+        sender: {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+        },
         content: gif.title,
         messageType: 'gif',
         mediaUrl: gif.url,
@@ -406,6 +444,11 @@ const ChatScreen: React.FC = () => {
     try {
       const newMsg = await sendMessage({
         senderId: user.id,
+        sender: {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+        },
         content: type === 'photo' ? 'Photo Attachment' : 'Video Recording',
         messageType: type,
         mediaUrl: url,
@@ -438,6 +481,11 @@ const ChatScreen: React.FC = () => {
     try {
       const newMsg = await sendMessage({
         senderId: user.id,
+        sender: {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+        },
         content: doc.name,
         messageType: 'document',
         mediaUrl: doc.url,
@@ -559,6 +607,11 @@ const ChatScreen: React.FC = () => {
     try {
       const newMsg = await sendMessage({
         senderId: user.id,
+        sender: {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+        },
         content: `Voice Message (${duration}s)`,
         messageType: 'voice',
         mediaUrl: dummyAudioUrl,
@@ -603,6 +656,11 @@ const ChatScreen: React.FC = () => {
     try {
       const newMsg = await createPoll({
         senderId: user.id,
+        sender: {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+        },
         question: q,
         options: validOptions,
       });
@@ -1687,24 +1745,7 @@ const ChatScreen: React.FC = () => {
                   <Text style={[styles.customSendBtnText, { color: colors.primary }]}>🖼️ Choose Photo from Device Library</Text>
                 </TouchableOpacity>
 
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                  Preset Infrastructure Photos
-                </Text>
-                {PHOTO_PRESETS.map((p, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[styles.presetRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    onPress={() => handleSendMedia('photo', p.url, p.filename)}
-                  >
-                    <Image source={{ uri: p.url }} style={styles.presetThumb} />
-                    <View style={styles.presetInfo}>
-                      <Text style={[styles.presetLabel, { color: colors.textPrimary }]}>{p.label}</Text>
-                      <Text style={[styles.presetSub, { color: colors.primary }]}>Tap to send photo</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 20 }]}>
+                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 12 }]}>
                   Or Paste Custom Image URL
                 </Text>
                 <TextInput
@@ -1738,28 +1779,7 @@ const ChatScreen: React.FC = () => {
                   <Text style={[styles.customSendBtnText, { color: colors.primary }]}>🎬 Pick Video from Device Storage</Text>
                 </TouchableOpacity>
 
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                  Preset Technical Video Recordings
-                </Text>
-                {VIDEO_PRESETS.map((v, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[styles.presetRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    onPress={() => handleSendMedia('video', v.url, v.filename, v.duration)}
-                  >
-                    <View style={styles.videoPresetIcon}>
-                      <Text style={{ fontSize: 24 }}>🎬</Text>
-                    </View>
-                    <View style={styles.presetInfo}>
-                      <Text style={[styles.presetLabel, { color: colors.textPrimary }]}>{v.label}</Text>
-                      <Text style={[styles.presetSub, { color: colors.primary }]}>
-                        {v.filename} ({v.duration}s) • Tap to send
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 20 }]}>
+                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 12 }]}>
                   Or Paste Custom Video URL
                 </Text>
                 <TextInput
@@ -1793,30 +1813,7 @@ const ChatScreen: React.FC = () => {
                   <Text style={[styles.customSendBtnText, { color: colors.primary }]}>📂 Pick File from Device Storage</Text>
                 </TouchableOpacity>
 
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                  Preset Technical Documents & Whitepapers
-                </Text>
-                {DOCUMENT_PRESETS.map((d, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[styles.presetRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    onPress={() => handleSendDocument(d)}
-                  >
-                    <View style={styles.docPresetIcon}>
-                      <Text style={{ fontSize: 24 }}>
-                        {d.name.endsWith('.pdf') ? '📄' : d.mimeType.includes('audio') ? '🎵' : '📝'}
-                      </Text>
-                    </View>
-                    <View style={styles.presetInfo}>
-                      <Text style={[styles.presetLabel, { color: colors.textPrimary }]}>{d.name}</Text>
-                      <Text style={[styles.presetSub, { color: colors.primary }]}>
-                        {d.mimeType} • {formatFileSize(d.size)}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 20 }]}>
+                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 12 }]}>
                   Or Attach Custom Document Link
                 </Text>
                 <TextInput
@@ -1996,7 +1993,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: TOP_SAFE_PADDING,
+    paddingBottom: 12,
     borderBottomWidth: 1,
   },
   headerTitleWrap: {
@@ -2698,6 +2696,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
+    paddingTop: TOP_SAFE_PADDING,
   },
   dialogCard: {
     width: '100%',
@@ -2818,6 +2817,7 @@ const styles = StyleSheet.create({
   // ── Full Screen Modals (Giphy / Attach) ──
   fullModalContainer: {
     flex: 1,
+    paddingTop: TOP_SAFE_PADDING,
   },
   fullModalHeader: {
     flexDirection: 'row',
@@ -2981,7 +2981,7 @@ const styles = StyleSheet.create({
   },
   zoomCloseBtn: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 44 : 20,
+    top: TOP_SAFE_PADDING,
     right: 20,
     zIndex: 10,
     backgroundColor: '#1A2C38',

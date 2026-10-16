@@ -5,8 +5,12 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // ─── Read env variables ───────────────────────────────────────────────────────
 // Expo exposes EXPO_PUBLIC_* vars on process.env at both build and runtime.
-const rawUrl = process.env['EXPO_PUBLIC_SUPABASE_URL'] ?? '';
-const rawKey = process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] ?? '';
+// Dot-syntax access is required for Metro/Babel static variable inlining.
+const rawUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env['EXPO_PUBLIC_SUPABASE_URL'] || '';
+const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] || '';
+
+const FALLBACK_URL = 'https://sonjftotjytdglgvvndj.supabase.co';
+const FALLBACK_KEY = 'sb_publishable_8oNr8W1bF701ZXPZXdwtSA_XZ6-Tsho';
 
 // A valid URL must start with https:// and contain a real host.
 const isValidUrl = (s: string): boolean => {
@@ -18,19 +22,16 @@ const isValidUrl = (s: string): boolean => {
   }
 };
 
-const isValidKey = (s: string): boolean => s.length > 20;
+const isValidKey = (s: string): boolean => Boolean(s && s.length > 20);
+
+// Use environment variables when valid, otherwise use the live project fallback credentials
+const supabaseUrl = isValidUrl(rawUrl) ? rawUrl : FALLBACK_URL;
+const supabaseAnonKey = isValidKey(rawKey) ? rawKey : FALLBACK_KEY;
 
 /**
- * True when both EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY
- * are present and appear to be real (non-placeholder) values.
- * Screens that depend on live data check this flag and show a local-mode banner instead of crashing.
+ * True when the effective Supabase credentials are valid and live.
  */
-export const isSupabaseConfigured: boolean = isValidUrl(rawUrl) && isValidKey(rawKey);
-
-// Fall back to a syntactically valid but non-functional URL so createClient()
-// never throws during app startup when the .env hasn't been populated yet.
-const supabaseUrl = isSupabaseConfigured ? rawUrl : 'https://sonjftotjytdglgvvndj.supabase.co';
-const supabaseAnonKey = isSupabaseConfigured ? rawKey : 'sb_publishable_8oNr8W1bF701ZXPZXdwtSA_XZ6-Tsho';
+export const isSupabaseConfigured: boolean = isValidUrl(supabaseUrl) && isValidKey(supabaseAnonKey);
 
 // ─── Supabase client (singleton) ─────────────────────────────────────────────
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {

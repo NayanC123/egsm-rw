@@ -20,7 +20,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  BackHandler,
 } from 'react-native';
+import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -129,6 +131,42 @@ export const AdminPortalScreen: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Hardware Back Button listener: handle sub-modals and sub-tabs
+  useEffect(() => {
+    const onBackPress = () => {
+      if (muteModalVisible) {
+        setMuteModalVisible(false);
+        return true;
+      }
+      if (suspendModalVisible) {
+        setSuspendModalVisible(false);
+        return true;
+      }
+      if (passwordResetModalVisible) {
+        setPasswordResetModalVisible(false);
+        return true;
+      }
+      if (activeResolveRequest !== null) {
+        setActiveResolveRequest(null);
+        return true;
+      }
+      if (activeSubTab !== 'accounts') {
+        setActiveSubTab('accounts');
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [
+    muteModalVisible,
+    suspendModalVisible,
+    passwordResetModalVisible,
+    activeResolveRequest,
+    activeSubTab,
+  ]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -1381,7 +1419,7 @@ const adminStyles = (c: ReturnType<typeof useTheme>['colors']) =>
       borderBottomWidth: 1,
       borderBottomColor: c.border,
       paddingHorizontal: 16,
-      paddingTop: Platform.OS === 'ios' ? 12 : 16,
+      paddingTop: TOP_SAFE_PADDING,
       paddingBottom: 12,
     },
     topBarLeft: {
@@ -2066,6 +2104,7 @@ const adminStyles = (c: ReturnType<typeof useTheme>['colors']) =>
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
+      paddingTop: TOP_SAFE_PADDING,
     },
     modalBox: {
       width: '100%',

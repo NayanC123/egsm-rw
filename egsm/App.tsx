@@ -14,6 +14,7 @@ import {
   StatusBar,
   StyleSheet,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 
@@ -123,6 +124,19 @@ const AppShell: React.FC = () => {
     }
   };
 
+  React.useEffect(() => {
+    const onBackPress = () => {
+      if (activeTab !== 'chat') {
+        setActiveTab('chat');
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [activeTab]);
+
   const s = shellStyles(colors);
 
   return (
@@ -172,7 +186,10 @@ const AppShell: React.FC = () => {
 
 const shellStyles = (c: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
-    safe:    { flex: 1, backgroundColor: c.mainBackground },
+    safe: {
+      flex: 1,
+      backgroundColor: c.mainBackground,
+    },
     content: { flex: 1 },
     dockContainer: {
       position: 'relative',
@@ -255,6 +272,7 @@ const RootNavigator: React.FC = () => {
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={colors.mainBackground}
+        translucent={Platform.OS === 'android'}
       />
       {user ? <AppShell /> : <LoginScreen />}
 

@@ -23,9 +23,9 @@ import {
   View,
 } from 'react-native';
 import { supabase, isSupabaseConfigured } from '../../services/supabase';
-import { localStore } from '../../context/AuthContext';
 import { fetchPosts } from '../../services/postsService';
 import { useTheme } from '../../context/ThemeContext';
+import { TOP_SAFE_PADDING } from '../../utils/layout';
 import type { LeaderboardEntry, Profile } from '../../types/database';
 
 // ─────────────────────────────────────────────────────────────
@@ -464,7 +464,8 @@ const createStyles = (
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingTop: TOP_SAFE_PADDING,
+      paddingBottom: 12,
       borderBottomWidth: 1,
       borderBottomColor: 'rgba(255, 255, 255, 0.07)',
       backgroundColor: isDark ? '#0D161F' : c.surface,

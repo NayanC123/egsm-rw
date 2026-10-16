@@ -1,7 +1,6 @@
 // src/context/AuthContext.tsx
-// Manages the logged-in Profile, realtime account-status monitoring, and
-// a fully functional local-mode fallback store so every feature works
-// even before .env is populated.
+// Manages the logged-in Profile and realtime account-status monitoring directly with Supabase.
+// Zero local fallback arrays. Direct database-first authentication.
 
 import React, {
   createContext,
@@ -14,93 +13,7 @@ import React, {
 } from 'react';
 import { Alert } from 'react-native';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
-import type { Profile, PasswordResetRequest } from '../types/database';
-
-// ─── Local fallback store ─────────────────────────────────────────────────────
-// Mirrors the real DB structure in memory so every feature is testable offline.
-
-let _localProfiles: Profile[] = [
-  {
-    id: 'local-admin-000',
-    username: 'admin',
-    password_hash: 'admin123',
-    display_name: 'Administrator',
-    role: 'admin',
-    status: 'active',
-    suspended_until: null,
-    muted_until: null,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'local-member-001',
-    username: 'member1',
-    password_hash: 'member123',
-    display_name: 'Test Member',
-    role: 'member',
-    status: 'active',
-    suspended_until: null,
-    muted_until: null,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'local-member-002',
-    username: 'suspended_user',
-    password_hash: 'suspend123',
-    display_name: 'Suspended Member',
-    role: 'member',
-    status: 'suspended',
-    // Suspended until 2 days 4 hours from now
-    suspended_until: new Date(Date.now() + 52 * 3600 * 1000).toISOString(),
-    muted_until: null,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'local-member-003',
-    username: 'terminated_user',
-    password_hash: 'term123',
-    display_name: 'Terminated Member',
-    role: 'member',
-    status: 'terminated',
-    suspended_until: null,
-    muted_until: null,
-    created_at: new Date().toISOString(),
-  },
-];
-
-let _localPasswordResetRequests: PasswordResetRequest[] = [
-  {
-    id: 'req-reset-001',
-    username: 'member1',
-    request_note: 'Lost access to device authenticator; requesting temporary credential reset.',
-    status: 'pending',
-    created_at: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-  },
-];
-
-/** Exported so other services (Admin panel) can interact with the local store. */
-export const localStore = {
-  getProfiles: (): Profile[] => _localProfiles,
-  addProfile: (p: Profile): void => {
-    _localProfiles = [..._localProfiles, p];
-  },
-  updateProfile: (id: string, patch: Partial<Profile>): void => {
-    _localProfiles = _localProfiles.map((p) => (p.id === id ? { ...p, ...patch } : p));
-  },
-  findByUsername: (username: string): Profile | undefined =>
-    _localProfiles.find((p) => p.username.toLowerCase() === username.toLowerCase()),
-  getPasswordResetRequests: (): PasswordResetRequest[] => _localPasswordResetRequests,
-  addPasswordResetRequest: (req: PasswordResetRequest): void => {
-    _localPasswordResetRequests = [req, ..._localPasswordResetRequests];
-  },
-  updatePasswordResetRequest: (id: string, patch: Partial<PasswordResetRequest>): void => {
-    _localPasswordResetRequests = _localPasswordResetRequests.map((r) =>
-      r.id === id ? { ...r, ...patch } : r
-    );
-  },
-};
-
-// ─── Auth helpers ─────────────────────────────────────────────────────────────
-
+import type { Profile } from '../types/database';
 
 // ─── Account-status check ─────────────────────────────────────────────────────
 
@@ -135,13 +48,13 @@ interface AuthContextValue {
   /** Attempt login; returns a LoginResult. */
   login: (username: string, password: string) => Promise<LoginResult>;
   logout: () => void;
-  /** Refresh the current user's profile from DB / local store. */
+  /** Refresh the current user's profile directly from DB. */
   refreshUser: () => Promise<void>;
-  /** Update display name in Supabase or localStore and React state. */
+  /** Update display name in Supabase and React state. */
   updateDisplayName: (newName: string) => Promise<{ success: boolean; error?: string }>;
   /** Verify current password and update to new password. */
   updatePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
-  /** Submit password reset request to password_reset_requests. */
+  /** Submit password reset request to password_reset_requests in Supabase. */
   submitPasswordReset: (username: string, note?: string) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -178,35 +91,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // ── Refresh helper ─────────────────────────────────────────────────────────
   const refreshUser = useCallback(async () => {
     const current = userRef.current;
-    if (!current) return;
+    if (!current?.id) return;
 
-    let fresh: Profile | null = null;
-
-    if (isSupabaseConfigured) {
-      const { data } = await supabase
+    try {
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', current.id)
         .single();
-      fresh = data as Profile | null;
-    } else {
-      fresh = localStore.findByUsername(current.username) ?? null;
-    }
 
-    if (!fresh) {
-      // Profile deleted — force logout.
-      setUser(null);
-      setBlockReason('terminated');
-      return;
-    }
+      if (error || !data) {
+        console.warn('[AuthContext] refreshUser failed:', error);
+        return;
+      }
 
-    setUser(fresh);
-    setBlockReason(getBlockReason(fresh));
+      const fresh = data as Profile;
+      setUser(fresh);
+      setBlockReason(getBlockReason(fresh));
+    } catch (err) {
+      console.warn('[AuthContext] refreshUser exception:', err);
+    }
   }, []);
 
   // ── Realtime subscription (live account-status changes) ───────────────────
   useEffect(() => {
-    if (!isSupabaseConfigured || !user) return;
+    if (!user?.id) return;
 
     const channel = supabase
       .channel(`profile-status-${user.id}`)
@@ -227,7 +136,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       )
       .subscribe();
 
-    // Polling fallback (every 30 s) in case Realtime is not enabled on this plan.
     const pollInterval = setInterval(refreshUser, 30_000);
 
     return () => {
@@ -236,24 +144,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, [user?.id, refreshUser]);
 
-  // ── Local-mode polling ─────────────────────────────────────────────────────
-  useEffect(() => {
-    if (isSupabaseConfigured || !user) return;
-
-    const pollInterval = setInterval(() => {
-      const fresh = localStore.findByUsername(user.username);
-      if (!fresh) return;
-      setUser(fresh);
-      setBlockReason(getBlockReason(fresh));
-    }, 5_000);
-
-    return () => clearInterval(pollInterval);
-  }, [user?.username]);
-
   // ── Login ──────────────────────────────────────────────────────────────────
   const login = useCallback(
     async (username: string, password: string): Promise<LoginResult> => {
-      // 1. Sanitize inputs
       const cleanUser = username.trim().toLowerCase();
       const cleanPass = password.trim();
 
@@ -268,29 +161,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       setIsLoading(true);
       try {
-        // Query public.profiles directly
+        // Query public.profiles directly by username
         const { data, error } = await supabase
           .from('profiles')
           .select('*')
-          .eq('username', cleanUser);
+          .eq('username', cleanUser)
+          .single();
 
-        // Log everything
-        console.log('[Auth Debug] Query result:', { data, error });
-
-        // a) Network / Database Connection Error
         if (error) {
-          Alert.alert('Database Error', error.message + ' (Code: ' + error.code + ')');
+          Alert.alert('Database Error', `${error.message} (Code: ${error.code})`);
           return { success: false, error: `${error.message} (Code: ${error.code})` };
         }
 
-        // b) User Not Found
-        if (!data || data.length === 0) {
-          Alert.alert('User Not Found', 'No profile found in database with username: ' + cleanUser);
-          return { success: false, error: 'No profile found in database with username: ' + cleanUser };
+        if (!data) {
+          Alert.alert('User Not Found', `No profile found in database with username: @${cleanUser}`);
+          return { success: false, error: `No profile found with username: @${cleanUser}` };
         }
 
-        // c) Password Check (Handles both plain text and hash)
-        const profile = data[0] as Profile;
+        const profile = data as Profile;
+
+        // Verify valid UUID from Supabase
+        if (!profile.id || profile.id.length < 20) {
+          Alert.alert('Authentication Error', 'Profile does not possess a valid database UUID.');
+          return { success: false, error: 'Profile does not possess a valid database UUID.' };
+        }
+
+        // Password Check (Handles both plain text and hash)
         const isPasswordMatch =
           profile.password_hash === cleanPass ||
           (typeof btoa !== 'undefined' && profile.password_hash === btoa(cleanPass));
@@ -298,15 +194,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (!isPasswordMatch) {
           Alert.alert(
             'Password Mismatch',
-            'The password entered does not match the record for @' + cleanUser,
+            `The password entered does not match the record for @${cleanUser}`,
           );
           return {
             success: false,
-            error: 'The password entered does not match the record for @' + cleanUser,
+            error: `The password entered does not match the record for @${cleanUser}`,
           };
         }
 
-        // d) Account Status Check
+        // Account Status Check
         if (profile.status === 'terminated') {
           Alert.alert(
             'Account Terminated',
@@ -339,14 +235,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         }
 
-        // If active, set currentUser = profile and successfully log in
+        // Only store real Supabase profile with valid UUID in React state
         setUser(profile);
         setBlockReason(null);
         return { success: true, profile };
       } catch (err: any) {
-        console.error('[Auth Debug] Unexpected login exception:', err);
+        console.error('[AuthContext] Unexpected login exception:', err);
         Alert.alert(
-          'Database Error',
+          'Sync Error',
           (err?.message || String(err)) + ' (Code: UNEXPECTED_EXCEPTION)',
         );
         return { success: false, error: String(err?.message || err) };
@@ -370,35 +266,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!trimmed) {
         return { success: false, error: 'Display name cannot be empty.' };
       }
-      if (!user) {
+      if (!user?.id) {
         return { success: false, error: 'No active session.' };
       }
 
-      if (isSupabaseConfigured) {
-        try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .update({ display_name: trimmed })
-            .eq('id', user.id)
-            .select()
-            .single();
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update({ display_name: trimmed })
+          .eq('id', user.id)
+          .select()
+          .single();
 
-          if (error) {
-            return { success: false, error: error.message };
-          }
-          if (data) {
-            setUser(data as Profile);
-          } else {
-            setUser((prev) => (prev ? { ...prev, display_name: trimmed } : null));
-          }
-          return { success: true };
-        } catch (err: any) {
-          return { success: false, error: err?.message || 'Failed to update display name.' };
+        if (error) {
+          Alert.alert('Sync Error', `${error.message} (${error.code})`);
+          return { success: false, error: error.message };
         }
-      } else {
-        localStore.updateProfile(user.id, { display_name: trimmed });
-        setUser((prev) => (prev ? { ...prev, display_name: trimmed } : null));
+        if (data) {
+          setUser(data as Profile);
+        } else {
+          setUser((prev) => (prev ? { ...prev, display_name: trimmed } : null));
+        }
         return { success: true };
+      } catch (err: any) {
+        Alert.alert('Sync Error', err?.message || 'Failed to update display name.');
+        return { success: false, error: err?.message || 'Failed to update display name.' };
       }
     },
     [user],
@@ -410,7 +302,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       currentPassword: string,
       newPassword: string,
     ): Promise<{ success: boolean; error?: string }> => {
-      if (!user) {
+      if (!user?.id) {
         return { success: false, error: 'No active session.' };
       }
       if (!currentPassword) {
@@ -420,30 +312,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return { success: false, error: 'New password must be at least 4 characters.' };
       }
 
-      // Verify current password against active profile password_hash
-      if (user.password_hash !== currentPassword) {
+      if (
+        user.password_hash !== currentPassword &&
+        (typeof btoa === 'undefined' || user.password_hash !== btoa(currentPassword))
+      ) {
         return { success: false, error: 'Current password does not match our records.' };
       }
 
-      if (isSupabaseConfigured) {
-        try {
-          const { error } = await supabase
-            .from('profiles')
-            .update({ password_hash: newPassword })
-            .eq('id', user.id);
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ password_hash: newPassword })
+          .eq('id', user.id);
 
-          if (error) {
-            return { success: false, error: error.message };
-          }
-          setUser((prev) => (prev ? { ...prev, password_hash: newPassword } : null));
-          return { success: true };
-        } catch (err: any) {
-          return { success: false, error: err?.message || 'Failed to update password.' };
+        if (error) {
+          Alert.alert('Sync Error', `${error.message} (${error.code})`);
+          return { success: false, error: error.message };
         }
-      } else {
-        localStore.updateProfile(user.id, { password_hash: newPassword });
         setUser((prev) => (prev ? { ...prev, password_hash: newPassword } : null));
         return { success: true };
+      } catch (err: any) {
+        Alert.alert('Sync Error', err?.message || 'Failed to update password.');
+        return { success: false, error: err?.message || 'Failed to update password.' };
       }
     },
     [user],
@@ -455,37 +345,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       username: string,
       note?: string,
     ): Promise<{ success: boolean; error?: string }> => {
-      const cleanUsername = username.trim();
+      const cleanUsername = username.trim().toLowerCase();
       if (!cleanUsername) {
         return { success: false, error: 'Please enter your username.' };
       }
 
-      if (isSupabaseConfigured) {
-        try {
-          const { error } = await supabase.from('password_reset_requests').insert({
-            username: cleanUsername,
-            request_note: note?.trim() || null,
-            status: 'pending',
-          });
-          if (error) {
-            return { success: false, error: error.message };
-          }
-          return { success: true };
-        } catch (err: any) {
-          return {
-            success: false,
-            error: err?.message || 'Failed to submit password reset request.',
-          };
-        }
-      } else {
-        localStore.addPasswordResetRequest({
-          id: `local-reset-${Date.now()}`,
+      try {
+        const { error } = await supabase.from('password_reset_requests').insert({
           username: cleanUsername,
           request_note: note?.trim() || null,
           status: 'pending',
-          created_at: new Date().toISOString(),
         });
+        if (error) {
+          Alert.alert('Sync Error', `${error.message} (${error.code})`);
+          return { success: false, error: error.message };
+        }
         return { success: true };
+      } catch (err: any) {
+        Alert.alert('Sync Error', err?.message || 'Failed to submit password reset request.');
+        return {
+          success: false,
+          error: err?.message || 'Failed to submit password reset request.',
+        };
       }
     },
     [],
@@ -510,3 +391,5 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+export default AuthContext;

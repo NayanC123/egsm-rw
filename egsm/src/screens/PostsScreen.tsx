@@ -18,9 +18,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  BackHandler,
 } from 'react-native';
+import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { supabase, isSupabaseConfigured } from '../services/supabase';
 import {
   fetchPosts,
   createPost,
@@ -37,53 +40,9 @@ import * as DocumentPicker from 'expo-document-picker';
 type PostsPageState = 'feed' | 'detail' | 'create' | 'leaderboard';
 
 // ─────────────────────────────────────────────────────────────
-// Sample Presets for Quick Image & Document Attachments
 // ─────────────────────────────────────────────────────────────
-
-interface ImagePreset {
-  label: string;
-  url: string;
-}
-
-const SAMPLE_IMAGE_PRESETS: ImagePreset[] = [
-  {
-    label: 'Cloud Infrastructure Diagram',
-    url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop&q=80',
-  },
-  {
-    label: 'Security & Encryption Node',
-    url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80',
-  },
-  {
-    label: 'Realtime Performance Analytics',
-    url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80',
-  },
-  {
-    label: 'Global Network Mesh Topology',
-    url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80',
-  },
-];
-
-const SAMPLE_DOCUMENT_PRESETS: DocumentAttachment[] = [
-  {
-    name: 'Decentralized_Protocol_Whitepaper_v2.pdf',
-    url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-    mimeType: 'application/pdf',
-    size: 1845120, // 1.8 MB
-  },
-  {
-    name: 'Executive_Voice_Briefing.m4a',
-    url: 'https://actions.google.com/sounds/v1/ambiences/rain_heavy.ogg',
-    mimeType: 'audio/m4a',
-    size: 3410500, // 3.4 MB
-  },
-  {
-    name: 'Security_Audit_Report_2026.docx',
-    url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    size: 924500, // 924 KB
-  },
-];
+// Format Helpers
+// ─────────────────────────────────────────────────────────────
 
 // Helper to format file sizes
 function formatFileSize(bytes: number): string {
@@ -164,7 +123,49 @@ const PostsScreen: React.FC = () => {
 
   useEffect(() => {
     loadPosts();
+
+    if (isSupabaseConfigured) {
+      const postsChannel = supabase
+        .channel('egsm-posts-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => {
+          loadPosts();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'post_ratings' }, () => {
+          loadPosts();
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(postsChannel);
+      };
+    }
   }, [loadPosts]);
+
+  // Hardware Back Button listener: handle sub-pages and modal dismissals
+  useEffect(() => {
+    const onBackPress = () => {
+      if (fullScreenImage !== null) {
+        setFullScreenImage(null);
+        return true;
+      }
+      if (imageModalVisible) {
+        setImageModalVisible(false);
+        return true;
+      }
+      if (docModalVisible) {
+        setDocModalVisible(false);
+        return true;
+      }
+      if (pageState !== 'feed') {
+        setPageState('feed');
+        return true;
+      }
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [fullScreenImage, imageModalVisible, docModalVisible, pageState]);
 
   // Handle pull-to-refresh
   const handleRefresh = useCallback(() => {
@@ -220,6 +221,11 @@ const PostsScreen: React.FC = () => {
     try {
       const res = await createPost({
         author_id: user.id,
+        author: {
+          id: user.id,
+          username: user.username,
+          display_name: user.display_name,
+        },
         subject: cleanSubject,
         content: cleanContent,
         image_urls: attachedImages,
@@ -741,7 +747,7 @@ const PostsScreen: React.FC = () => {
             <View style={s.pickerModalBox}>
               <Text style={s.pickerModalTitle}>📷 Attach Image</Text>
               <Text style={s.pickerModalSubtitle}>
-                Select an image from your device, enter a direct URL, or pick a preset:
+                Select an image from your device or enter a direct image URL:
               </Text>
 
               {/* Native Device Pickers */}
@@ -781,22 +787,6 @@ const PostsScreen: React.FC = () => {
                 <Text style={s.modalActionText}>Add Image URL</Text>
               </TouchableOpacity>
 
-              <Text style={s.presetSectionLabel}>Or choose from presets:</Text>
-              <ScrollView style={{ maxHeight: 180 }}>
-                {SAMPLE_IMAGE_PRESETS.map((preset, idx) => (
-                  <TouchableOpacity
-                    key={`preset-${idx}`}
-                    style={s.presetRow}
-                    onPress={() => addImageAttachment(preset.url)}
-                  >
-                    <Image source={{ uri: preset.url }} style={s.presetThumb} />
-                    <Text style={s.presetLabel} numberOfLines={1}>
-                      {preset.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
               <TouchableOpacity
                 style={s.modalCloseButton}
                 onPress={() => setImageModalVisible(false)}
@@ -818,7 +808,7 @@ const PostsScreen: React.FC = () => {
             <View style={s.pickerModalBox}>
               <Text style={s.pickerModalTitle}>📎 Attach Document</Text>
               <Text style={s.pickerModalSubtitle}>
-                Select a document from device storage, insert a link, or pick a standard preset:
+                Select a document from your device storage or enter a download URL:
               </Text>
 
               {/* Native Document Picker */}
@@ -836,7 +826,7 @@ const PostsScreen: React.FC = () => {
               <TextInput
                 id="input-custom-doc-name"
                 style={s.pickerInput}
-                placeholder="Document filename (e.g. Audit_Report.pdf)"
+                placeholder="Document filename (e.g. Report.pdf)"
                 placeholderTextColor="#4B5A68"
                 value={customDocName}
                 onChangeText={setCustomDocName}
@@ -868,25 +858,6 @@ const PostsScreen: React.FC = () => {
               >
                 <Text style={s.modalActionText}>Add Document</Text>
               </TouchableOpacity>
-
-              <Text style={s.presetSectionLabel}>Or choose from verified presets:</Text>
-              <ScrollView style={{ maxHeight: 180 }}>
-                {SAMPLE_DOCUMENT_PRESETS.map((docPreset, idx) => (
-                  <TouchableOpacity
-                    key={`doc-preset-${idx}`}
-                    style={s.presetRow}
-                    onPress={() => addDocumentAttachment(docPreset)}
-                  >
-                    <Text style={s.presetDocEmoji}>📄</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.presetLabel} numberOfLines={1}>
-                        {docPreset.name}
-                      </Text>
-                      <Text style={s.presetDocMeta}>{formatFileSize(docPreset.size)}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
 
               <TouchableOpacity
                 style={s.modalCloseButton}
@@ -1257,7 +1228,8 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingVertical: 12,
+      paddingTop: TOP_SAFE_PADDING,
+      paddingBottom: 12,
       borderBottomWidth: 1,
       borderBottomColor: 'rgba(255, 255, 255, 0.07)',
       backgroundColor: isDark ? '#0D161F' : c.surface,
@@ -1990,7 +1962,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
     },
     fullscreenCloseButton: {
       position: 'absolute',
-      top: 50,
+      top: TOP_SAFE_PADDING,
       right: 20,
       zIndex: 10,
       backgroundColor: '#FFFFFF33',
@@ -2015,6 +1987,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
+      paddingTop: TOP_SAFE_PADDING,
     },
     pickerModalBox: {
       backgroundColor: isDark ? '#0D161F' : '#FFFFFF',

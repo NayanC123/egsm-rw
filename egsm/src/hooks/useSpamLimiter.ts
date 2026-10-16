@@ -11,7 +11,6 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
-import { localStore } from '../context/AuthContext';
 import type { Profile } from '../types/database';
 
 // ─── Exact Spec Constants ─────────────────────────────────────────────────────
@@ -162,18 +161,14 @@ export function useSpamLimiter(currentUser: Profile | null): SpamLimiterHook {
     return () => clearInterval(id);
   }, []);
 
-  // ── Persist Hard Mute to Supabase / LocalStore ─────────────────────────────
+  // ── Persist Hard Mute to Supabase ─────────────────────────────────────────
   const persistHardMute = useCallback(
     async (mutedUntilIso: string) => {
-      if (!currentUser) return;
-      if (isSupabaseConfigured) {
-        await supabase
-          .from('profiles')
-          .update({ muted_until: mutedUntilIso })
-          .eq('id', currentUser.id);
-      } else {
-        localStore.updateProfile(currentUser.id, { muted_until: mutedUntilIso });
-      }
+      if (!currentUser?.id) return;
+      await supabase
+        .from('profiles')
+        .update({ muted_until: mutedUntilIso })
+        .eq('id', currentUser.id);
     },
     [currentUser]
   );

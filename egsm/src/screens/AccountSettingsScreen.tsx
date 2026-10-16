@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { TOP_SAFE_PADDING } from '../utils/layout';
 
 export const AccountSettingsScreen: React.FC = () => {
   const { user, logout, updateDisplayName, updatePassword } = useAuth();
@@ -385,6 +386,7 @@ const styles = (
       paddingBottom: 40,
     },
     header: {
+      paddingTop: TOP_SAFE_PADDING,
       marginBottom: 20,
     },
     pageTitle: {

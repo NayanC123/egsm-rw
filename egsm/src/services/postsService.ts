@@ -1,10 +1,10 @@
 // src/services/postsService.ts
 // Service handling Posts, Post Ratings (0–10), Announcements, and Leaderboard.
-// Full dual-mode support: Supabase live database + in-memory localStore fallback.
+// Writes directly to Supabase with strict column naming and immediate error alerts.
 // STRICT ANTI-CRASH & SAFETY: No delete operations exist in this service.
 
-import { supabase, isSupabaseConfigured } from './supabase';
-import { localStore } from '../context/AuthContext';
+import { Alert } from 'react-native';
+import { supabase } from './supabase';
 import type {
   Post,
   PostRating,
@@ -23,122 +23,6 @@ export interface DetailedPost extends Omit<PostWithDetails, 'ratings'> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Initial Seed Data for Local Fallback Store
-// ─────────────────────────────────────────────────────────────
-
-const now = Date.now();
-const oneDayMs = 24 * 60 * 60 * 1000;
-
-let _localPosts: Post[] = [
-  {
-    id: 'post-001',
-    author_id: 'local-admin-000',
-    subject: '📢 Welcome to egsm. Community Platform Guidelines & Rating Standards',
-    content:
-      'Welcome everyone to egsm.! Please remember that all posts made on this network are permanent and immutable. Once published, your posts will be viewed by all active members and evaluated on a strict 0–10 Satisfaction Rating scale.\n\nKeep contributions respectful, high-value, and focused on community growth. You can attach images and whitepapers directly from the toolbar below.',
-    image_urls: [
-      'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80',
-    ],
-    document_urls: [
-      {
-        name: 'egsm._Platform_Charter_v1.0.pdf',
-        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        mimeType: 'application/pdf',
-        size: 1258291,
-      },
-    ],
-    is_announcement: true,
-    created_at: new Date(now - 2 * oneDayMs).toISOString(),
-  },
-  {
-    id: 'post-002',
-    author_id: 'local-member-001',
-    subject: 'Decentralized State Caching Architecture & Benchmark Analysis',
-    content:
-      'Over the past week, we evaluated multiple caching strategies to minimize edge latencies across our regional nodes. By leveraging local persistence and delta synchronization, we observed an 82% reduction in initial cold-start query overhead.\n\nAttached are the benchmark graphs and complete architectural specification for review. Please rate and provide your thoughts!',
-    image_urls: [
-      'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80',
-    ],
-    document_urls: [
-      {
-        name: 'Node_Benchmarking_Report.pdf',
-        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        mimeType: 'application/pdf',
-        size: 2490368,
-      },
-      {
-        name: 'Audio_Walkthrough_Discussion.m4a',
-        url: 'https://actions.google.com/sounds/v1/ambiences/rain_heavy.ogg',
-        mimeType: 'audio/m4a',
-        size: 3840120,
-      },
-    ],
-    is_announcement: false,
-    created_at: new Date(now - 1 * oneDayMs).toISOString(),
-  },
-  {
-    id: 'post-003',
-    author_id: 'local-admin-000',
-    subject: 'Quarterly Infrastructure Roadmap & Validator Node Expansion',
-    content:
-      'We are rolling out upgraded validator nodes next Tuesday at 02:00 UTC. Zero downtime is expected. Read the attached schedule and let us know if your node operators have any questions.',
-    image_urls: [
-      'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&auto=format&fit=crop&q=80',
-    ],
-    document_urls: [
-      {
-        name: 'Validator_Upgrade_Schedule.pdf',
-        url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
-        mimeType: 'application/pdf',
-        size: 542000,
-      },
-    ],
-    is_announcement: false,
-    created_at: new Date(now - 3 * oneDayMs).toISOString(),
-  },
-];
-
-let _localRatings: RatingWithRater[] = [
-  {
-    id: 'rating-001',
-    post_id: 'post-001',
-    rater_id: 'local-member-001',
-    score: 10,
-    created_at: new Date(now - 1.5 * oneDayMs).toISOString(),
-    rater: {
-      id: 'local-member-001',
-      username: 'member1',
-      display_name: 'Test Member',
-    },
-  },
-  {
-    id: 'rating-002',
-    post_id: 'post-002',
-    rater_id: 'local-admin-000',
-    score: 9,
-    created_at: new Date(now - 18 * 60 * 60 * 1000).toISOString(),
-    rater: {
-      id: 'local-admin-000',
-      username: 'admin',
-      display_name: 'Administrator',
-    },
-  },
-  {
-    id: 'rating-003',
-    post_id: 'post-003',
-    rater_id: 'local-member-001',
-    score: 8,
-    created_at: new Date(now - 2.5 * oneDayMs).toISOString(),
-    rater: {
-      id: 'local-member-001',
-      username: 'member1',
-      display_name: 'Test Member',
-    },
-  },
-];
-
-// ─────────────────────────────────────────────────────────────
 // Core Service Methods
 // ─────────────────────────────────────────────────────────────
 
@@ -147,208 +31,149 @@ let _localRatings: RatingWithRater[] = [
  * Announcements are automatically sorted to the top.
  */
 export async function fetchPosts(currentUserId?: string): Promise<DetailedPost[]> {
-  if (isSupabaseConfigured) {
-    try {
-      const { data: postsData, error: postsError } = await supabase
-        .from('posts')
-        .select('*, author:profiles!author_id(id, username, display_name)')
-        .order('created_at', { ascending: false });
+  try {
+    const { data: postsData, error: postsError } = await supabase
+      .from('posts')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (postsError || !postsData) {
-        console.warn('Supabase fetchPosts error, falling back to local store:', postsError);
-        return getLocalPostsWithDetails(currentUserId);
+    if (postsError || !postsData) {
+      Alert.alert(
+        'Sync Error: fetchPosts',
+        `${postsError?.message || 'Failed to fetch posts'} (${postsError?.code || 'FETCH_ERR'})`
+      );
+      return [];
+    }
+
+    // Fetch all profiles from Supabase to guarantee real usernames and display names
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, role');
+
+    const profileMap = new Map<string, Pick<Profile, 'id' | 'username' | 'display_name' | 'role'>>();
+    (profilesData || []).forEach((p: any) => {
+      profileMap.set(p.id, p);
+      if (p.username) {
+        profileMap.set(p.username.toLowerCase(), p);
       }
+    });
 
-      const { data: ratingsData } = await supabase
-        .from('post_ratings')
-        .select('*, rater:profiles!rater_id(id, username, display_name)');
+    const { data: ratingsData } = await supabase
+      .from('post_ratings')
+      .select('*');
 
-      const allRatings = (ratingsData as any[]) || [];
+    const allRatings = (ratingsData as any[]) || [];
 
-      const detailed: DetailedPost[] = postsData.map((p: any) => {
-        const postRatings: RatingWithRater[] = allRatings
-          .filter((r) => r.post_id === p.id)
-          .map((r) => ({
+    const detailed: DetailedPost[] = postsData.map((p: any) => {
+      const postRatings: RatingWithRater[] = allRatings
+        .filter((r) => r.post_id === p.id)
+        .map((r) => {
+          const raterProf = profileMap.get(r.rater_id) || profileMap.get(String(r.rater_id).toLowerCase());
+          return {
             id: r.id,
             post_id: r.post_id,
             rater_id: r.rater_id,
             score: r.score,
             created_at: r.created_at,
-            rater: r.rater || {
-              id: r.rater_id,
-              username: 'unknown',
-              display_name: 'Member',
-            },
-          }));
+            rater: raterProf
+              ? { id: raterProf.id, username: raterProf.username, display_name: raterProf.display_name }
+              : { id: r.rater_id, username: 'user', display_name: 'Member' },
+          };
+        });
 
-        const count = postRatings.length;
-        const totalScore = postRatings.reduce((sum, r) => sum + r.score, 0);
-        const averageRating = count > 0 ? totalScore / count : null;
-        const satisfactionRate = averageRating !== null ? (averageRating / 10) * 100 : null;
-        const myRating = currentUserId
-          ? postRatings.find((r) => r.rater_id === currentUserId) || null
-          : null;
+      const count = postRatings.length;
+      const totalScore = postRatings.reduce((sum, r) => sum + r.score, 0);
+      const averageRating = count > 0 ? totalScore / count : null;
+      const satisfactionRate = averageRating !== null ? (averageRating / 10) * 100 : null;
+      const myRating = currentUserId
+        ? postRatings.find((r) => r.rater_id === currentUserId) || null
+        : null;
 
-        const author = p.author || {
-          id: p.author_id,
-          username: 'author',
-          display_name: 'Member',
-        };
+      const authorProf = profileMap.get(p.author_id) || profileMap.get(String(p.author_id).toLowerCase());
+      const author = authorProf
+        ? { id: authorProf.id, username: authorProf.username, display_name: authorProf.display_name }
+        : {
+            id: p.author_id,
+            username: 'member',
+            display_name: 'Community Member',
+          };
 
-        return {
-          id: p.id,
-          author_id: p.author_id,
-          subject: p.subject,
-          content: p.content,
-          image_urls: p.image_urls || [],
-          document_urls: p.document_urls || [],
-          is_announcement: Boolean(p.is_announcement),
-          created_at: p.created_at,
-          author,
-          ratings: postRatings,
-          averageRating,
-          satisfactionRate,
-          myRating,
-        };
-      });
+      return {
+        ...p,
+        author,
+        ratings: postRatings,
+        averageRating,
+        satisfactionRate,
+        myRating,
+      };
+    });
 
-      // Pinned announcements always come first, then newest first
-      detailed.sort((a, b) => {
-        if (a.is_announcement && !b.is_announcement) return -1;
-        if (!a.is_announcement && b.is_announcement) return 1;
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
+    // Pinned announcements always come first, then newest first
+    detailed.sort((a, b) => {
+      if (a.is_announcement && !b.is_announcement) return -1;
+      if (!a.is_announcement && b.is_announcement) return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
-      return detailed;
-    } catch (err) {
-      console.warn('fetchPosts exception, falling back to local store:', err);
-      return getLocalPostsWithDetails(currentUserId);
-    }
+    return detailed;
+  } catch (err: any) {
+    Alert.alert('Sync Error: fetchPosts', err?.message || 'Failed to fetch posts from database.');
+    return [];
   }
-
-  return getLocalPostsWithDetails(currentUserId);
 }
 
-/** Local store computation helper */
-function getLocalPostsWithDetails(currentUserId?: string): DetailedPost[] {
-  const profiles = localStore.getProfiles();
-  const profileMap = new Map<string, Profile>(profiles.map((p) => [p.id, p]));
-
-  const detailed: DetailedPost[] = _localPosts.map((p) => {
-    const authorProfile = profileMap.get(p.author_id);
-    const author = {
-      id: p.author_id,
-      username: authorProfile?.username || 'member',
-      display_name: authorProfile?.display_name || 'Community Member',
-    };
-
-    const postRatings = _localRatings
-      .filter((r) => r.post_id === p.id)
-      .map((r) => {
-        const raterProfile = profileMap.get(r.rater_id);
-        return {
-          ...r,
-          rater: r.rater || {
-            id: r.rater_id,
-            username: raterProfile?.username || 'member',
-            display_name: raterProfile?.display_name || 'Member',
-          },
-        };
-      });
-
-    const count = postRatings.length;
-    const totalScore = postRatings.reduce((sum, r) => sum + r.score, 0);
-    const averageRating = count > 0 ? totalScore / count : null;
-    const satisfactionRate = averageRating !== null ? (averageRating / 10) * 100 : null;
-    const myRating = currentUserId
-      ? postRatings.find((r) => r.rater_id === currentUserId) || null
-      : null;
-
-    return {
-      ...p,
-      author,
-      ratings: postRatings,
-      averageRating,
-      satisfactionRate,
-      myRating,
-    };
-  });
-
-  // Pinned announcements always come first, then newest first
-  detailed.sort((a, b) => {
-    if (a.is_announcement && !b.is_announcement) return -1;
-    if (!a.is_announcement && b.is_announcement) return 1;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
-
-  return detailed;
-}
-
-/**
- * Publish a new permanent post.
- * STRICT ENFORCEMENT: Posts cannot be deleted once created.
- */
-export async function createPost(params: {
+export interface CreatePostParams {
   author_id: string;
+  author?: Pick<Profile, 'id' | 'username' | 'display_name'>;
   subject: string;
   content: string;
   image_urls: string[];
   document_urls: DocumentAttachment[];
   is_announcement?: boolean;
-}): Promise<{ success: boolean; post?: Post; error?: string }> {
+}
+
+export async function createPost(
+  params: CreatePostParams
+): Promise<{ success: boolean; post?: Post & { author?: Pick<Profile, 'id' | 'username' | 'display_name'> }; error?: string }> {
   const cleanSubject = params.subject.trim();
   const cleanContent = params.content.trim();
 
   if (!cleanSubject) {
+    Alert.alert('Validation Error', 'Post subject is required.');
     return { success: false, error: 'Post subject is required.' };
   }
   if (!cleanContent) {
+    Alert.alert('Validation Error', 'Post content cannot be empty.');
     return { success: false, error: 'Post content cannot be empty.' };
   }
 
-  const newPost: Post = {
-    id: `post-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    author_id: params.author_id,
-    subject: cleanSubject,
-    content: cleanContent,
-    image_urls: params.image_urls,
-    document_urls: params.document_urls,
-    is_announcement: Boolean(params.is_announcement),
-    created_at: new Date().toISOString(),
-  };
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .insert({
+        author_id: params.author_id,
+        subject: cleanSubject,
+        content: cleanContent,
+        image_urls: params.image_urls || [],
+        document_urls: params.document_urls || [],
+        is_announcement: Boolean(params.is_announcement),
+      })
+      .select()
+      .single();
 
-  // Always keep in local store for instantaneous UI transitions
-  _localPosts = [newPost, ..._localPosts];
-
-  if (isSupabaseConfigured) {
-    try {
-      const { data, error } = await supabase
-        .from('posts')
-        .insert({
-          author_id: params.author_id,
-          subject: cleanSubject,
-          content: cleanContent,
-          image_urls: params.image_urls,
-          document_urls: params.document_urls,
-          is_announcement: Boolean(params.is_announcement),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.warn('Supabase createPost error (local cache preserved):', error);
-        return { success: true, post: newPost };
-      }
-
-      if (data) {
-        return { success: true, post: data as Post };
-      }
-    } catch (err: any) {
-      console.warn('createPost exception (local cache preserved):', err);
+    if (error) {
+      Alert.alert('Sync Error: createPost', `${error.message} (${error.code})`);
+      return { success: false, error: error.message };
     }
-  }
 
-  return { success: true, post: newPost };
+    if (data) {
+      return { success: true, post: { ...(data as Post), author: params.author } };
+    }
+    return { success: false, error: 'Failed to create post.' };
+  } catch (err: any) {
+    Alert.alert('Sync Error: createPost', err?.message || 'Failed to create post in database.');
+    return { success: false, error: err?.message || 'Failed to create post.' };
+  }
 }
 
 /**
@@ -362,49 +187,29 @@ export async function ratePost(params: {
   const { post_id, rater, score } = params;
 
   if (score < 0 || score > 10 || !Number.isInteger(score)) {
+    Alert.alert('Validation Error', 'Score must be an integer between 0 and 10.');
     return { success: false, error: 'Score must be an integer between 0 and 10.' };
   }
 
-  // Update local cache
-  const existingIndex = _localRatings.findIndex(
-    (r) => r.post_id === post_id && r.rater_id === rater.id
-  );
+  try {
+    const { error } = await supabase.from('post_ratings').upsert(
+      {
+        post_id: post_id,
+        rater_id: rater.id,
+        score: score,
+      },
+      { onConflict: 'post_id,rater_id' }
+    );
 
-  const newRatingRecord: RatingWithRater = {
-    id: existingIndex >= 0 ? _localRatings[existingIndex].id : `rating-${Date.now()}`,
-    post_id,
-    rater_id: rater.id,
-    score,
-    created_at: new Date().toISOString(),
-    rater,
-  };
-
-  if (existingIndex >= 0) {
-    _localRatings[existingIndex] = newRatingRecord;
-  } else {
-    _localRatings.push(newRatingRecord);
-  }
-
-  if (isSupabaseConfigured) {
-    try {
-      const { error } = await supabase.from('post_ratings').upsert(
-        {
-          post_id,
-          rater_id: rater.id,
-          score,
-        },
-        { onConflict: 'post_id,rater_id' }
-      );
-
-      if (error) {
-        console.warn('Supabase ratePost error (local cache updated):', error);
-      }
-    } catch (err) {
-      console.warn('ratePost exception (local cache updated):', err);
+    if (error) {
+      Alert.alert('Sync Error: ratePost', `${error.message} (${error.code})`);
+      return { success: false, error: error.message };
     }
+    return { success: true };
+  } catch (err: any) {
+    Alert.alert('Sync Error: ratePost', err?.message || 'Failed to submit rating.');
+    return { success: false, error: err?.message || 'Failed to submit rating.' };
   }
-
-  return { success: true };
 }
 
 /**
@@ -414,28 +219,21 @@ export async function toggleAnnouncement(
   postId: string,
   isAnnouncement: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  // Update local cache
-  _localPosts = _localPosts.map((p) =>
-    p.id === postId ? { ...p, is_announcement: isAnnouncement } : p
-  );
+  try {
+    const { error } = await supabase
+      .from('posts')
+      .update({ is_announcement: isAnnouncement })
+      .eq('id', postId);
 
-  if (isSupabaseConfigured) {
-    try {
-      const { error } = await supabase
-        .from('posts')
-        .update({ is_announcement: isAnnouncement })
-        .eq('id', postId);
-
-      if (error) {
-        console.warn('Supabase toggleAnnouncement error:', error);
-        return { success: false, error: error.message };
-      }
-    } catch (err: any) {
-      return { success: false, error: err?.message || 'Failed to update announcement.' };
+    if (error) {
+      Alert.alert('Sync Error: toggleAnnouncement', `${error.message} (${error.code})`);
+      return { success: false, error: error.message };
     }
+    return { success: true };
+  } catch (err: any) {
+    Alert.alert('Sync Error: toggleAnnouncement', err?.message || 'Failed to update announcement.');
+    return { success: false, error: err?.message || 'Failed to update announcement.' };
   }
-
-  return { success: true };
 }
 
 /**
@@ -445,10 +243,21 @@ export async function toggleAnnouncement(
  */
 export async function computeLeaderboard(): Promise<LeaderboardEntry[]> {
   const posts = await fetchPosts();
-  const profiles = localStore.getProfiles();
-  const profileMap = new Map<string, Profile>(profiles.map((p) => [p.id, p]));
 
-  const sevenDaysAgo = Date.now() - 7 * oneDayMs;
+  // Query real profiles from Supabase to guarantee real display names
+  const { data: profilesData } = await supabase
+    .from('profiles')
+    .select('id, username, display_name');
+
+  const profileMap = new Map<string, Pick<Profile, 'id' | 'username' | 'display_name'>>();
+  (profilesData || []).forEach((p: any) => {
+    profileMap.set(p.id, p);
+    if (p.username) {
+      profileMap.set(p.username.toLowerCase(), p);
+    }
+  });
+
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
   // Group posts and calculate metrics per author
   const authorStats = new Map<
@@ -466,12 +275,12 @@ export async function computeLeaderboard(): Promise<LeaderboardEntry[]> {
     const authorId = p.author_id;
     let stat = authorStats.get(authorId);
     if (!stat) {
-      const profile = profileMap.get(authorId) || p.author;
+      const prof = profileMap.get(authorId) || profileMap.get(String(authorId).toLowerCase()) || p.author;
       stat = {
         profile: {
-          id: profile.id,
-          username: profile.username,
-          display_name: profile.display_name,
+          id: prof.id,
+          username: prof.username,
+          display_name: prof.display_name,
         },
         totalPosts: 0,
         recentPosts: 0,
