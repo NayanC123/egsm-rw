@@ -239,8 +239,8 @@ Realtime: all 8 tables added to `supabase_realtime` publication.
     - **Feed & Card Aesthetics (`PostsScreen.tsx`)**:
       - Pinned Announcements: styled with warm, subtle amber glow (`rgba(255, 102, 0, 0.06)` background, `rgba(255, 102, 0, 0.25)` border, subtle amber shadow) and crisp `#FF6600` accent tags instead of flat orange boxes.
       - Post Cards: generous internal padding (16px), subtle dividers, rounded corners (`borderRadius: 18`).
-  - **Gradle 9+ Project Name Sanitization Plugin**:
-    - Created `plugins/withGradleProjectName.js` to strip trailing dots from `rootProject.name` in `settings.gradle` while preserving `egsm.` as the Android `app_name` in `strings.xml`.
+  - **Gradle 9+ Project Name Compatibility**:
+    - Set `name: "egsm"` in `app.json` so Gradle 9's `rootProject.name` never ends with a dot (`.`), while all in-app UI branding proudly displays `egsm.`.
   - **Zero Error TypeScript Verification**:
     - `npx tsc --noEmit` verified with **0 errors**.
 

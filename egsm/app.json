@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "egsm.",
+    "name": "egsm",
     "slug": "egsm",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -29,10 +29,11 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -47,6 +48,11 @@
     ],
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "19233969-836b-45ec-9c0a-23dd2494896d"
+      }
     }
   }
 }
