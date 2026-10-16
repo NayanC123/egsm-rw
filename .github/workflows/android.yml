@@ -1,5 +1,4 @@
 name: Build Android APK
-uses: android-actions/setup-android@v3
 
 on:
   workflow_dispatch:
@@ -29,11 +28,7 @@ jobs:
         with:
           api-level: 33
           build-tools: 33.0.2
-          components: |
-            platform-tools
-            platforms;android-33
-            build-tools;33.0.2
-            cmdline-tools;latest
+          components: platform-tools,build-tools;33.0.2,platforms;android-33,cmdline-tools;latest
 
       - name: Ensure SDK components & accept licenses
         run: |
