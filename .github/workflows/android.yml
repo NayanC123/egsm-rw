@@ -26,6 +26,15 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Ensure Android SDK components
+        env:
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: |
+          SDKMANAGER=$(find "$ANDROID_SDK_ROOT" -type f -name sdkmanager | head -n1)
+          echo "Using sdkmanager: $SDKMANAGER"
+          # Replace android-33 / 33.0.2 with the API level / build-tools that match your project (compileSdkVersion)
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" "cmdline-tools;latest" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+
       - name: Install dependencies
         run: npm install
 
