@@ -52,7 +52,9 @@
     "extra": {
       "eas": {
         "projectId": "19233969-836b-45ec-9c0a-23dd2494896d"
-      }
+      },
+      "supabaseUrl": "https://sonjftotjytdglgvvndj.supabase.co",
+      "supabaseAnonKey": "sb_publishable_8oNr8W1bF701ZXPZXdwtSA_XZ6-Tsho"
     }
   }
 }

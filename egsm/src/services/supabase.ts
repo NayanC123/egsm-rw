@@ -30,7 +30,7 @@ export const isSupabaseConfigured: boolean = isValidUrl(rawUrl) && isValidKey(ra
 // Fall back to a syntactically valid but non-functional URL so createClient()
 // never throws during app startup when the .env hasn't been populated yet.
 const supabaseUrl = isSupabaseConfigured ? rawUrl : 'https://sonjftotjytdglgvvndj.supabase.co';
-const supabaseAnonKey = isSupabaseConfigured ? rawKey : 'sb_publishable_8oNr8W1bF701Z';
+const supabaseAnonKey = isSupabaseConfigured ? rawKey : 'sb_publishable_8oNr8W1bF701ZXPZXdwtSA_XZ6-Tsho';
 
 // ─── Supabase client (singleton) ─────────────────────────────────────────────
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
