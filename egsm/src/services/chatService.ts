@@ -25,7 +25,7 @@ let _localMessages: Message[] = [
   {
     id: 'msg-001',
     sender_id: 'local-admin-000',
-    content: '📌 Welcome to the EGSM Group Chat! Please maintain constructive discourse. Official documentation: https://docs.egsm.network and source https://github.com/egsm-protocol.',
+    content: '📌 Welcome to the egsm. Group Chat! Please maintain constructive discourse. Official documentation: https://docs.egsm.network and source https://github.com/egsm-protocol.',
     message_type: 'text',
     media_url: null,
     media_meta: {},

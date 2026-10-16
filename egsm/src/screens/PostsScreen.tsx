@@ -410,7 +410,7 @@ const PostsScreen: React.FC = () => {
         {/* Top Header Bar */}
         <View style={s.topHeader}>
           <View style={s.titleContainer}>
-            <Text style={s.headerTitle}>EGSM Posts</Text>
+            <Text style={s.headerTitle}>egsm. posts</Text>
             <View style={s.permanentBadge}>
               <Text style={s.permanentBadgeText}>IMMUTABLE</Text>
             </View>
@@ -1053,8 +1053,8 @@ const PostsScreen: React.FC = () => {
                           {doc.mimeType.includes('pdf')
                             ? 'PDF'
                             : doc.mimeType.includes('audio')
-                            ? 'AUDIO'
-                            : 'DOCUMENT'}
+                              ? 'AUDIO'
+                              : 'DOCUMENT'}
                         </Text>
                       </View>
                       <Text style={s.detailDocSize}>{formatFileSize(doc.size)}</Text>
@@ -1086,9 +1086,8 @@ const PostsScreen: React.FC = () => {
                 </Text>
                 <Text style={s.satisfactionSubtitle}>
                   {avgScore !== null
-                    ? `Average: ${avgScore.toFixed(1)} / 10 (${totalVotes} ${
-                        totalVotes === 1 ? 'rating' : 'ratings'
-                      })`
+                    ? `Average: ${avgScore.toFixed(1)} / 10 (${totalVotes} ${totalVotes === 1 ? 'rating' : 'ratings'
+                    })`
                     : 'No ratings submitted yet'}
                 </Text>
               </View>

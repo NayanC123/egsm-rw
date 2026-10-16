@@ -1,5 +1,5 @@
 // src/screens/AdminPortalScreen.tsx
-// Complete Access-Controlled Administration Portal for EGSM.
+// Complete Access-Controlled Administration Portal for egsm.
 // Strictly access-controlled: only users with currentUser.role === 'admin' can access it.
 // Organised into 4 clean sub-tabs:
 //   Sub-Tab A: Create & Manage Accounts (Create Card + Member Directory & Moderation)

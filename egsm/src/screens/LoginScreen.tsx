@@ -114,7 +114,7 @@ const LoginScreen: React.FC = () => {
           {/* Header & Logo */}
           <View style={s.logoContainer}>
             <View style={s.badgeBox}>
-              <Text style={s.badgeText}>EGSM</Text>
+              <Text style={s.badgeText}>egsm.</Text>
             </View>
             <Text style={s.subtitle}>Design and Implementation by Nayan</Text>
             <Text style={s.subtitle}>Version 2.0.0</Text>
@@ -360,19 +360,19 @@ const styles = (
       marginBottom: 28,
     },
     badgeBox: {
-      backgroundColor: isDark ? '#0D161E' : '#FFFFFF',
-      borderWidth: 1.5,
-      borderColor: c.primary,
+      backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
+      borderWidth: 1,
+      borderColor: 'rgba(0, 255, 204, 0.35)',
       paddingHorizontal: 16,
       paddingVertical: 6,
-      borderRadius: 12,
+      borderRadius: 14,
       marginBottom: 12,
     },
     badgeText: {
       color: c.primary,
-      fontSize: 16,
+      fontSize: 22,
       fontWeight: '700',
-      letterSpacing: 2,
+      letterSpacing: -0.5,
     },
     title: {
       fontSize: 32,

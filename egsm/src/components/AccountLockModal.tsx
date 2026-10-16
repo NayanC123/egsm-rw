@@ -115,7 +115,7 @@ export const AccountLockModal: React.FC<AccountLockModalProps> = ({
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Administrative Action Notice</Text>
               <Text style={styles.cardBody}>
-                This user account has been permanently revoked by the system administration. All access to the EGSM platform, messages, posts, ratings, and active privileges has been cancelled.
+                This user account has been permanently revoked by the system administration. All access to the egsm. platform, messages, posts, ratings, and active privileges has been cancelled.
               </Text>
               <View style={styles.subCard}>
                 <Text style={styles.subCardLabel}>POLICY CODE</Text>

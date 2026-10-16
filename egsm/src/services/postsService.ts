@@ -33,16 +33,16 @@ let _localPosts: Post[] = [
   {
     id: 'post-001',
     author_id: 'local-admin-000',
-    subject: '📢 Welcome to EGSM Community Platform Guidelines & Rating Standards',
+    subject: '📢 Welcome to egsm. Community Platform Guidelines & Rating Standards',
     content:
-      'Welcome everyone to EGSM! Please remember that all posts made on this network are permanent and immutable. Once published, your posts will be viewed by all active members and evaluated on a strict 0–10 Satisfaction Rating scale.\n\nKeep contributions respectful, high-value, and focused on community growth. You can attach images and whitepapers directly from the toolbar below.',
+      'Welcome everyone to egsm.! Please remember that all posts made on this network are permanent and immutable. Once published, your posts will be viewed by all active members and evaluated on a strict 0–10 Satisfaction Rating scale.\n\nKeep contributions respectful, high-value, and focused on community growth. You can attach images and whitepapers directly from the toolbar below.',
     image_urls: [
       'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format&fit=crop&q=80',
       'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80',
     ],
     document_urls: [
       {
-        name: 'EGSM_Platform_Charter_v1.0.pdf',
+        name: 'egsm._Platform_Charter_v1.0.pdf',
         url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
         mimeType: 'application/pdf',
         size: 1258291,

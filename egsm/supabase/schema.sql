@@ -1,5 +1,5 @@
 -- =============================================================
--- EGSM — Complete Supabase PostgreSQL Schema
+-- egsm. — Complete Supabase PostgreSQL Schema
 -- Run this in the Supabase SQL Editor (Dashboard → SQL → New Query)
 -- =============================================================
 
