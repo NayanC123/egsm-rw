@@ -117,7 +117,7 @@ const LoginScreen: React.FC = () => {
               <Text style={s.badgeText}>egsm.</Text>
             </View>
             <Text style={s.subtitle}>Design and Implementation by Nayan</Text>
-            <Text style={s.subtitle}>Version 2.0.0</Text>
+            <Text style={s.subtitle}>Version 2.0.2</Text>
           </View>
 
           {/* Login Card */}
