@@ -1,7 +1,7 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch: # Allows you to trigger the build manually with one click
+  workflow_dispatch:
   push:
     branches: [ main, 2.0.5-beta ]
 
@@ -16,7 +16,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -27,18 +26,25 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Node Dependencies
-        run: npm ci || npm install
+      - name: Install Dependencies
+        run: |
+          if [ -d "egsm" ]; then cd egsm; fi
+          npm install
 
       - name: Generate Native Android Project
-        run: npx expo prebuild --platform android --clean
+        run: |
+          if [ -d "egsm" ]; then cd egsm; fi
+          npx expo prebuild --platform android --clean
 
       - name: Build Release APK with Gradle
-        working-directory: ./android
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          if [ -d "egsm" ]; then cd egsm/android; else cd android; fi
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
 
       - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: |
+            **/android/app/build/outputs/apk/release/*.apk
