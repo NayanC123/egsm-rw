@@ -1,4 +1,5 @@
 name: Build Android APK
+uses: android-actions/setup-android@v3
 
 on:
   workflow_dispatch:
