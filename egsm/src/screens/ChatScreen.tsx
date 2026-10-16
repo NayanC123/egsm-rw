@@ -2,7 +2,7 @@
 // Phase 5 — Full Group Chat Interface & Sliding-Window Spam Limitation Engine
 // STRICT ANTI-CRASH: ONLY built-in react-native components, string fontWeights, zero @react-navigation.
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,8 @@ import {
   BackHandler,
   KeyboardAvoidingView,
   Keyboard,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
@@ -42,10 +44,13 @@ import type {
   MessageType,
   MediaMeta,
 } from '../types/database';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import { getNativeAudio, SafeVideo, SafeResizeMode } from '../services/audioVideoService';
+import { SafeVideo, SafeResizeMode } from '../services/audioVideoService';
+import { SAFE_TOP } from '../utils/layout';
+import { Audio } from 'expo-av';
 import { uploadFileToSupabase } from '../services/storageService';
+import { HyperlinkText } from '../components/common/HyperlinkText';
+
+const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
 
 // ─────────────────────────────────────────────────────────────
 // Curated Presets for Offline / Fallback Media
@@ -108,29 +113,6 @@ function formatFileSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function parseTextWithLinks(text: string): Array<{ text: string; isUrl: boolean; url?: string }> {
-  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-  const parts: Array<{ text: string; isUrl: boolean; url?: string }> = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = urlRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ text: text.substring(lastIndex, match.index), isUrl: false });
-    }
-    const rawUrl = match[0];
-    const fullUrl = rawUrl.toLowerCase().startsWith('www.') ? `https://${rawUrl}` : rawUrl;
-    parts.push({ text: rawUrl, isUrl: true, url: fullUrl });
-    lastIndex = match.index + rawUrl.length;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push({ text: text.substring(lastIndex), isUrl: false });
-  }
-
-  return parts;
-}
-
 // ─────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────
@@ -166,22 +148,21 @@ const ChatScreen: React.FC = () => {
   const [giphyResults, setGiphyResults] = useState<CuratedGif[]>([]);
   const [isLoadingGifs, setIsLoadingGifs] = useState<boolean>(false);
 
-  // Media Attachment Modal (Photos, Videos, Documents)
+  // Media Attachment Modal (Photos, Videos, Audio, Documents)
   const [isAttachModalOpen, setIsAttachModalOpen] = useState<boolean>(false);
-  const [attachTab, setAttachTab] = useState<'photo' | 'video' | 'doc'>('photo');
+  const [attachTab, setAttachTab] = useState<'photo' | 'video' | 'audio' | 'doc'>('photo');
   const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
   const [customMediaName, setCustomMediaName] = useState<string>('');
 
   // Voice Note Recording
   const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
-  const recordingTimerRef = useRef<any>(null);
-  const recordingRef = useRef<any>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   // Voice Playback
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const [playbackSeconds, setPlaybackSeconds] = useState<number>(0);
-  const soundRef = useRef<any>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   // Uploading State
   const [isUploadingMedia, setIsUploadingMedia] = useState<boolean>(false);
@@ -200,7 +181,24 @@ const ChatScreen: React.FC = () => {
     try {
       const data = await fetchMessages();
       if (mountedRef.current) {
-        setMessages(data);
+        setMessages((prev) => {
+          if (prev.length === data.length) {
+            let identical = true;
+            for (let i = 0; i < prev.length; i++) {
+              if (
+                prev[i].id !== data[i].id ||
+                prev[i].content !== data[i].content ||
+                prev[i].is_deleted !== data[i].is_deleted ||
+                prev[i].is_pinned !== data[i].is_pinned
+              ) {
+                identical = false;
+                break;
+              }
+            }
+            if (identical) return prev;
+          }
+          return data;
+        });
       }
     } catch (err) {
       console.warn('Failed to fetch messages:', err);
@@ -209,6 +207,17 @@ const ChatScreen: React.FC = () => {
         setIsLoading(false);
       }
     }
+  }, []);
+
+  // Memoized reversed message stream for inverted FlatList
+  const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
+
+  // Track if user is near bottom (in inverted list, contentOffset.y <= 60 means near bottom)
+  const isNearBottomRef = useRef(true);
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset } = event.nativeEvent;
+    isNearBottomRef.current = contentOffset.y <= 60;
   }, []);
 
   // Hardware Back Button listener: handle sub-modals and previews
@@ -252,15 +261,30 @@ const ChatScreen: React.FC = () => {
     isPollModalOpen,
   ]);
 
-  // Auto-scroll chat stream to latest message when keyboard pops up
+  // ─── Voice Recording Timer ─────────────────────────────────
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(showEvent, () => {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 80);
-    });
-    return () => sub.remove();
+    let timer: any = null;
+    if (isRecordingVoice) {
+      setRecordingSeconds(0);
+      timer = setInterval(() => {
+        setRecordingSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isRecordingVoice]);
+
+  // ─── Voice Playback Cleanup ─────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync().catch(() => {});
+      }
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -301,29 +325,6 @@ const ChatScreen: React.FC = () => {
     }
   }, [loadMessages]);
 
-  // ─── Voice Recording Timer ─────────────────────────────────
-  useEffect(() => {
-    if (isRecordingVoice) {
-      setRecordingSeconds(0);
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
-      }, 1000);
-    } else {
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-    }
-    return () => {
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-    };
-  }, [isRecordingVoice]);
-
-  // ─── Voice Playback Cleanup ─────────────────────────────────
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
-      }
-    };
-  }, []);
 
   // ─── Giphy Query or Filter ─────────────────────────────────
   useEffect(() => {
@@ -395,7 +396,6 @@ const ChatScreen: React.FC = () => {
         messageType: 'text',
       });
       setMessages((prev) => [...prev, newMsg]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
       Alert.alert('Send Error', 'Failed to deliver message.');
     }
@@ -426,14 +426,13 @@ const ChatScreen: React.FC = () => {
       });
       spamLimiter.recordMediaSend();
       setMessages((prev) => [...prev, newMsg]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
       Alert.alert('Error', 'Failed to send GIF.');
     }
   };
 
-  // Send Photo / Video Preset or Custom URL
-  const handleSendMedia = async (type: 'photo' | 'video', url: string, filename: string, duration?: number) => {
+  // Send Photo, Video, or Audio URL
+  const handleSendMedia = async (type: 'photo' | 'video' | 'voice', url: string, filename: string, duration?: number) => {
     if (!user || !url) return;
     const allowed = spamLimiter.checkMessage(url, true);
     if (!allowed) {
@@ -453,7 +452,7 @@ const ChatScreen: React.FC = () => {
           username: user.username,
           display_name: user.display_name,
         },
-        content: type === 'photo' ? 'Photo Attachment' : 'Video Recording',
+        content: type === 'photo' ? 'Photo Attachment' : type === 'video' ? 'Video Recording' : 'Voice Message',
         messageType: type,
         mediaUrl: url,
         mediaMeta: {
@@ -463,7 +462,6 @@ const ChatScreen: React.FC = () => {
       });
       spamLimiter.recordMediaSend();
       setMessages((prev) => [...prev, newMsg]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
       Alert.alert('Error', `Failed to send ${type}.`);
     }
@@ -500,182 +498,14 @@ const ChatScreen: React.FC = () => {
       });
       spamLimiter.recordMediaSend();
       setMessages((prev) => [...prev, newMsg]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
       Alert.alert('Error', 'Failed to send document.');
     }
   };
 
-  // ── Native Device Pickers (Image, Camera, Video, Document) ──
-  const handleNativeCameraPhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Camera permission is required to capture photos and videos.');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images', 'videos'],
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setIsUploadingMedia(true);
-        try {
-          const isVideo = asset.type === 'video';
-          const defaultName = isVideo ? 'camera_video.mp4' : 'camera_photo.jpg';
-          const mimeType = asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg');
-          const publicUrl = await uploadFileToSupabase(
-            asset.uri,
-            asset.fileName || defaultName,
-            mimeType,
-            'chat-media'
-          );
-          await handleSendMedia(
-            isVideo ? 'video' : 'photo',
-            publicUrl,
-            asset.fileName || defaultName,
-            asset.duration ? Math.round(asset.duration / 1000) : undefined
-          );
-        } catch (uploadErr: any) {
-          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload captured media.');
-        } finally {
-          setIsUploadingMedia(false);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[ChatScreen Camera Error]:', err);
-      Alert.alert('Camera Error', err?.message || 'Could not capture media.');
-    }
-  };
-
-  const handleNativeLibraryPhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Media library access is required to select photos and videos.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images', 'videos'],
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setIsUploadingMedia(true);
-        try {
-          const isVideo = asset.type === 'video';
-          const defaultName = isVideo ? 'gallery_video.mp4' : 'gallery_photo.jpg';
-          const mimeType = asset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg');
-          const publicUrl = await uploadFileToSupabase(
-            asset.uri,
-            asset.fileName || defaultName,
-            mimeType,
-            'chat-media'
-          );
-          await handleSendMedia(
-            isVideo ? 'video' : 'photo',
-            publicUrl,
-            asset.fileName || defaultName,
-            asset.duration ? Math.round(asset.duration / 1000) : undefined
-          );
-        } catch (uploadErr: any) {
-          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload selected media.');
-        } finally {
-          setIsUploadingMedia(false);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[ChatScreen ImagePicker Error]:', err);
-      Alert.alert('Picker Error', err?.message || 'Could not select media.');
-    }
-  };
-
-  const handleNativePickVideo = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Media library access is required to select videos.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['videos'],
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setIsUploadingMedia(true);
-        try {
-          const publicUrl = await uploadFileToSupabase(
-            asset.uri,
-            asset.fileName || 'video.mp4',
-            asset.mimeType || 'video/mp4',
-            'chat-media'
-          );
-          await handleSendMedia(
-            'video',
-            publicUrl,
-            asset.fileName || 'video.mp4',
-            asset.duration ? Math.round(asset.duration / 1000) : 15
-          );
-        } catch (uploadErr: any) {
-          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload video.');
-        } finally {
-          setIsUploadingMedia(false);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[ChatScreen VideoPicker Error]:', err);
-      Alert.alert('Picker Error', err?.message || 'Could not select video.');
-    }
-  };
-
-  const handleNativePickDoc = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setIsUploadingMedia(true);
-        try {
-          const publicUrl = await uploadFileToSupabase(
-            asset.uri,
-            asset.name || 'document.bin',
-            asset.mimeType || 'application/octet-stream',
-            'chat-media'
-          );
-          await handleSendDocument({
-            name: asset.name || 'document.bin',
-            url: publicUrl,
-            mimeType: asset.mimeType || 'application/octet-stream',
-            size: asset.size || 0,
-          });
-        } catch (uploadErr: any) {
-          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload document.');
-        } finally {
-          setIsUploadingMedia(false);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[ChatScreen DocumentPicker Error]:', err);
-      Alert.alert('Document Picker Error', err?.message || 'Could not pick document.');
-    }
-  };
-
-  // ── Voice Recording & Playback ──
+  // ── Voice Recording & Playback ──────────────────────────────
   const handleStartVoiceRecord = async () => {
     if (spamLimiter.mediaLocked || spamLimiter.isInputLocked) return;
-
-    const Audio = getNativeAudio();
-    if (!Audio) {
-      Alert.alert(
-        'Voice Recording Unavailable',
-        'Voice recording requires the native ExponentAV module (not included in Expo Go). You can still attach and send audio files using the Document Picker (📎) or use a standalone build.'
-      );
-      return;
-    }
 
     try {
       const { status } = await Audio.requestPermissionsAsync();
@@ -700,10 +530,11 @@ const ChatScreen: React.FC = () => {
 
   const handleCancelVoiceRecord = async () => {
     setIsRecordingVoice(false);
+    setRecordingSeconds(0);
     if (recordingRef.current) {
       try {
         await recordingRef.current.stopAndUnloadAsync();
-      } catch (err) {}
+      } catch (e) {}
       recordingRef.current = null;
     }
   };
@@ -712,7 +543,6 @@ const ChatScreen: React.FC = () => {
     if (!user) return;
     const duration = Math.max(1, recordingSeconds);
     setIsRecordingVoice(false);
-
     const recording = recordingRef.current;
     if (!recording) return;
 
@@ -722,9 +552,7 @@ const ChatScreen: React.FC = () => {
       const uri = recording.getURI();
       recordingRef.current = null;
 
-      if (!uri) {
-        throw new Error('Recording audio URI was not generated.');
-      }
+      if (!uri) throw new Error('Could not retrieve recording URI.');
 
       const cleanFilename = `voice_${Date.now()}.m4a`;
       const publicUrl = await uploadFileToSupabase(uri, cleanFilename, 'audio/m4a', 'chat-media');
@@ -749,24 +577,17 @@ const ChatScreen: React.FC = () => {
       });
       spamLimiter.recordMediaSend();
       setMessages((prev) => [...prev, newMsg]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err: any) {
       console.error('Failed to send voice note:', err);
       Alert.alert('Upload Error', err?.message || 'Failed to send voice note.');
     } finally {
       setIsUploadingMedia(false);
+      setRecordingSeconds(0);
     }
   };
 
   const handleTogglePlayVoice = async (msg: MessageWithSender) => {
     if (!msg.media_url) return;
-
-    const Audio = getNativeAudio();
-    if (!Audio) {
-      // In Expo Go without ExponentAV, open the voice note URL directly so the user can listen to it
-      Linking.openURL(msg.media_url);
-      return;
-    }
 
     if (playingVoiceId === msg.id) {
       if (soundRef.current) {
@@ -803,7 +624,7 @@ const ChatScreen: React.FC = () => {
       setPlayingVoiceId(msg.id);
       setPlaybackSeconds(0);
 
-      sound.setOnPlaybackStatusUpdate((status: any) => {
+      sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded) {
           if (status.positionMillis) {
             setPlaybackSeconds(Math.floor(status.positionMillis / 1000));
@@ -817,8 +638,8 @@ const ChatScreen: React.FC = () => {
         }
       });
     } catch (err: any) {
-      console.error('Playback Error:', err);
-      Linking.openURL(msg.media_url);
+      console.error('Audio Playback Error:', err);
+      Linking.openURL(msg.media_url).catch(() => {});
       setPlayingVoiceId(null);
       setPlaybackSeconds(0);
     }
@@ -861,7 +682,6 @@ const ChatScreen: React.FC = () => {
         options: validOptions,
       });
       setMessages((prev) => [...prev, newMsg]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (err) {
       Alert.alert('Error', 'Failed to create poll.');
     }
@@ -943,7 +763,8 @@ const ChatScreen: React.FC = () => {
 
   // Quick jump to pinned message
   const jumpToMessage = (messageId: string) => {
-    const idx = messages.findIndex((m) => m.id === messageId);
+    const reversed = [...messages].reverse();
+    const idx = reversed.findIndex((m) => m.id === messageId);
     if (idx >= 0 && flatListRef.current) {
       flatListRef.current.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
     }
@@ -1056,7 +877,7 @@ const ChatScreen: React.FC = () => {
           <View style={styles.bubbleHeader}>
             <View style={styles.bubbleAuthorWrap}>
               <Text style={[styles.bubbleAuthor, { color: isMe ? colors.primary : colors.textPrimary }]}>
-                {item.sender?.display_name || item.sender?.username || 'Member'}
+                {item.sender?.display_name || (item.sender?.username ? `@${item.sender.username}` : 'User')}
               </Text>
               {isSenderAdmin && (
                 <View style={[styles.adminTag, { backgroundColor: colors.primary }]}>
@@ -1084,30 +905,11 @@ const ChatScreen: React.FC = () => {
             <>
               {/* Type 1: Standard Text Message with Hyperlink Support */}
               {item.message_type === 'text' && (
-                <Text style={styles.messageTextBody}>
-                  {parseTextWithLinks(item.content).map((part, pIdx) => {
-                    if (part.isUrl && part.url) {
-                      return (
-                        <Text
-                          key={pIdx}
-                          style={[styles.linkText, { color: colors.primary }]}
-                          onPress={() => {
-                            Linking.openURL(part.url!).catch((e) =>
-                              Alert.alert('Cannot Open Link', e?.message || 'Invalid link')
-                            );
-                          }}
-                        >
-                          {part.text}
-                        </Text>
-                      );
-                    }
-                    return (
-                      <Text key={pIdx} style={{ color: colors.textPrimary }}>
-                        {part.text}
-                      </Text>
-                    );
-                  })}
-                </Text>
+                <HyperlinkText
+                  text={item.content}
+                  style={[styles.messageTextBody, { color: colors.textPrimary }]}
+                  linkStyle={{ color: '#00FFCC', textDecorationLine: 'underline' }}
+                />
               )}
 
               {/* Type 2: GIF */}
@@ -1168,7 +970,7 @@ const ChatScreen: React.FC = () => {
                 </View>
               )}
 
-              {/* Type 5: Voice Note with Real Audio Play/Pause UI */}
+              {/* Type 5: Voice Note with Interactive Play / Pause */}
               {item.message_type === 'voice' && (
                 <View style={[styles.voiceCard, { backgroundColor: isDark ? '#071017' : '#F1F5F8' }]}>
                   <TouchableOpacity
@@ -1194,7 +996,7 @@ const ChatScreen: React.FC = () => {
                                 ? (bIdx / 14 <= playbackSeconds / (item.media_meta?.duration || 10)
                                     ? colors.primary
                                     : (isDark ? '#334856' : '#BAC8D3'))
-                                : (isDark ? '#334856' : '#BAC8D3'),
+                                : colors.primary,
                             },
                           ]}
                         />
@@ -1204,11 +1006,13 @@ const ChatScreen: React.FC = () => {
                     <View style={styles.voiceTimerRow}>
                       <Text style={[styles.voiceTimerText, { color: colors.textSecondary }]}>
                         {isPlayingThisVoice
-                          ? `00:${playbackSeconds.toString().padStart(2, '0')}`
-                          : `00:${(item.media_meta?.duration || 10).toString().padStart(2, '0')}`}
+                          ? `0:${playbackSeconds.toString().padStart(2, '0')}`
+                          : item.media_meta?.duration
+                          ? `0:${item.media_meta.duration.toString().padStart(2, '0')}`
+                          : 'Voice Note'}
                       </Text>
                       <Text style={[styles.voiceBadge, { color: colors.primary }]}>
-                        🎤 Voice Note
+                        🎤 {item.media_meta?.duration ? `${item.media_meta.duration}s` : 'Audio'}
                       </Text>
                     </View>
                   </View>
@@ -1261,11 +1065,7 @@ const ChatScreen: React.FC = () => {
   // ─────────────────────────────────────────────────────────────
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.mainBackground }]}
-      behavior="padding"
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-    >
+    <View style={[styles.container, { backgroundColor: colors.mainBackground }]}>
       {/* ── Chat Header ── */}
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <View style={styles.headerTitleWrap}>
@@ -1396,207 +1196,219 @@ const ChatScreen: React.FC = () => {
         </View>
       )}
 
-      {/* ── Message Stream ── */}
-      {isLoading ? (
-        <View style={styles.loadingArea}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading chat stream...</Text>
-        </View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessageItem}
-          contentContainerStyle={styles.messagesList}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={[styles.emptyEmoji]}>💬</Text>
-              <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No messages yet</Text>
-              <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-                Be the first to start the conversation!
-              </Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: '#050A0E' }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        {/* ── Message Stream Container (Strictly Defined Viewport Height) ── */}
+        <View style={styles.messageStreamContainer}>
+          {isLoading ? (
+            <View style={styles.loadingArea}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading chat stream...</Text>
             </View>
-          }
-        />
-      )}
-
-      {/* ── Media Cooldown Indicator ── */}
-      {spamLimiter.mediaLocked && (
-        <View style={[styles.mediaCooldownBar, { backgroundColor: isDark ? '#1C1200' : '#FFF5E6', borderColor: colors.accent }]}>
-          <Text style={[styles.mediaCooldownText, { color: colors.accent }]}>
-            ⏳ Media Cooldown Active: {spamLimiter.mediaRemainingSeconds}s remaining (max 4 per 60s)
-          </Text>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={reversedMessages}
+              inverted={true}
+              keyExtractor={(item) => item.id}
+              renderItem={renderMessageItem}
+              contentContainerStyle={styles.flatListContentContainer}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              showsVerticalScrollIndicator={true}
+              removeClippedSubviews={false}
+              overScrollMode="always"
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={[styles.emptyEmoji]}>💬</Text>
+                  <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No messages yet</Text>
+                  <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
+                    Be the first to start the conversation!
+                  </Text>
+                </View>
+              }
+            />
+          )}
         </View>
-      )}
 
-      {/* ── Media Uploading Indicator ── */}
-      {isUploadingMedia && (
-        <View style={[styles.uploadingMediaBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
-          <Text style={[styles.uploadingMediaText, { color: colors.primary }]}>
-            Uploading media to Supabase Storage...
-          </Text>
-        </View>
-      )}
-
-      {/* ── Voice Recording Active Bar (replaces composer when recording) ── */}
-      {isRecordingVoice ? (
-        <View style={[styles.recordingBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          <View style={styles.recordingLeft}>
-            <View style={styles.recordingPulseDot} />
-            <Text style={styles.recordingText}>REC</Text>
-            <Text style={[styles.recordingTimer, { color: colors.danger }]}>
-              00:{recordingSeconds.toString().padStart(2, '0')}
+        {/* ── Media Cooldown Indicator ── */}
+        {spamLimiter.mediaLocked && (
+          <View style={[styles.mediaCooldownBar, { backgroundColor: isDark ? '#1C1200' : '#FFF5E6', borderColor: colors.accent }]}>
+            <Text style={[styles.mediaCooldownText, { color: colors.accent }]}>
+              ⏳ Media Cooldown Active: {spamLimiter.mediaRemainingSeconds}s remaining (max 4 per 60s)
             </Text>
           </View>
+        )}
 
-          <View style={styles.recordingActions}>
-            <TouchableOpacity
-              id="cancel-voice-btn"
-              style={[styles.recordingCancelBtn, { borderColor: colors.border }]}
-              onPress={handleCancelVoiceRecord}
-            >
-              <Text style={[styles.recordingCancelText, { color: colors.textSecondary }]}>Cancel</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              id="send-voice-btn"
-              style={[styles.recordingSendBtn, { backgroundColor: colors.primary }]}
-              onPress={handleSendVoiceNote}
-            >
-              <Text style={styles.recordingSendText}>Send Voice Note ➤</Text>
-            </TouchableOpacity>
+        {/* ── Media Uploading Indicator ── */}
+        {isUploadingMedia && (
+          <View style={[styles.uploadingMediaBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
+            <Text style={[styles.uploadingMediaText, { color: colors.primary }]}>
+              Uploading voice note to Supabase Storage...
+            </Text>
           </View>
-        </View>
-      ) : (
-        /* ── Standard Input Toolbar & Composer ── */
-        <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-          {/* Quick Attachment Buttons */}
-          <View style={styles.toolsRow}>
-            {/* Paperclip / Attach Drawer */}
-            <TouchableOpacity
-              id="attach-media-btn"
-              style={[
-                styles.toolBtn,
-                {
-                  borderColor: spamLimiter.mediaLocked ? colors.border : colors.primary,
-                  opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
-                },
-              ]}
-              disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
-              onPress={() => setIsAttachModalOpen(true)}
-            >
-              <Text style={styles.toolIcon}>📎</Text>
-            </TouchableOpacity>
+        )}
 
-            {/* GIF Button */}
-            <TouchableOpacity
-              id="gif-modal-btn"
-              style={[
-                styles.toolBtn,
-                {
-                  borderColor: spamLimiter.mediaLocked ? colors.border : colors.accent,
-                  opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
-                },
-              ]}
-              disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
-              onPress={() => setIsGifModalOpen(true)}
-            >
-              <Text style={[styles.toolGifText, { color: colors.accent }]}>GIF</Text>
-            </TouchableOpacity>
-
-            {/* Poll Button */}
-            <TouchableOpacity
-              id="create-poll-btn"
-              style={[
-                styles.toolBtn,
-                {
-                  borderColor: colors.primary,
-                  opacity: spamLimiter.isInputLocked ? 0.4 : 1,
-                },
-              ]}
-              disabled={spamLimiter.isInputLocked}
-              onPress={() => setIsPollModalOpen(true)}
-            >
-              <Text style={styles.toolIcon}>📊</Text>
-            </TouchableOpacity>
-
-            {/* Microphone / Voice Note Button */}
-            <TouchableOpacity
-              id="record-voice-btn"
-              style={[
-                styles.toolBtn,
-                {
-                  borderColor: spamLimiter.mediaLocked ? colors.border : colors.primary,
-                  opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
-                },
-              ]}
-              disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
-              onPress={handleStartVoiceRecord}
-            >
-              <Text style={styles.toolIcon}>🎤</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Text Input Row */}
-          <View style={styles.composerRow}>
-            <TextInput
-              id="chat-message-input"
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: isDark ? '#050A0E' : '#F4F7F9',
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                },
-              ]}
-              placeholder={
-                spamLimiter.isInputLocked
-                  ? `Chat input locked (${spamLimiter.remainingSeconds}s remaining)`
-                  : 'Type a message or paste a link...'
-              }
-              placeholderTextColor={colors.textSecondary}
-              value={inputText}
-              onChangeText={setInputText}
-              editable={!spamLimiter.isInputLocked}
-              multiline={false}
-              onSubmitEditing={handleSendText}
-              returnKeyType="send"
-            />
-
-            <TouchableOpacity
-              id="chat-send-btn"
-              style={[
-                styles.sendBtn,
-                {
-                  backgroundColor: colors.primary,
-                  opacity:
-                    spamLimiter.isInputLocked ||
-                    spamLimiter.sendLocked ||
-                    inputText.trim().length === 0
-                      ? 0.4
-                      : 1,
-                },
-              ]}
-              disabled={
-                spamLimiter.isInputLocked ||
-                spamLimiter.sendLocked ||
-                inputText.trim().length === 0
-              }
-              onPress={handleSendText}
-            >
-              <Text style={styles.sendBtnText}>
-                {spamLimiter.sendLocked ? `${spamLimiter.remainingSeconds}s` : '➤'}
+        {/* ── Voice Recording Active Bar (replaces composer when recording) ── */}
+        {isRecordingVoice ? (
+          <View style={[styles.recordingBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            <View style={styles.recordingLeft}>
+              <View style={styles.recordingPulseDot} />
+              <Text style={styles.recordingText}>REC</Text>
+              <Text style={[styles.recordingTimer, { color: colors.danger }]}>
+                {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}
               </Text>
-            </TouchableOpacity>
+            </View>
+
+            <View style={styles.recordingActions}>
+              <TouchableOpacity
+                id="cancel-voice-btn"
+                style={[styles.recordingCancelBtn, { borderColor: colors.border }]}
+                onPress={handleCancelVoiceRecord}
+              >
+                <Text style={[styles.recordingCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                id="send-voice-btn"
+                style={[styles.recordingSendBtn, { backgroundColor: colors.primary }]}
+                onPress={handleSendVoiceNote}
+              >
+                <Text style={styles.recordingSendText}>Send Voice Note ➤</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
-      )}
+        ) : (
+          /* ── Standard Input Toolbar & Composer ── */
+          <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            {/* Quick Attachment Buttons */}
+            <View style={styles.toolsRow}>
+              {/* Paperclip / Attach Drawer */}
+              <TouchableOpacity
+                id="attach-media-btn"
+                style={[
+                  styles.toolBtn,
+                  {
+                    borderColor: spamLimiter.mediaLocked ? colors.border : colors.primary,
+                    opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
+                  },
+                ]}
+                disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
+                onPress={() => setIsAttachModalOpen(true)}
+              >
+                <Text style={styles.toolIcon}>📎</Text>
+              </TouchableOpacity>
+
+              {/* GIF Button */}
+              <TouchableOpacity
+                id="gif-modal-btn"
+                style={[
+                  styles.toolBtn,
+                  {
+                    borderColor: spamLimiter.mediaLocked ? colors.border : colors.accent,
+                    opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
+                  },
+                ]}
+                disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
+                onPress={() => setIsGifModalOpen(true)}
+              >
+                <Text style={[styles.toolGifText, { color: colors.accent }]}>GIF</Text>
+              </TouchableOpacity>
+
+              {/* Poll Button */}
+              <TouchableOpacity
+                id="create-poll-btn"
+                style={[
+                  styles.toolBtn,
+                  {
+                    borderColor: colors.primary,
+                    opacity: spamLimiter.isInputLocked ? 0.4 : 1,
+                  },
+                ]}
+                disabled={spamLimiter.isInputLocked}
+                onPress={() => setIsPollModalOpen(true)}
+              >
+                <Text style={styles.toolIcon}>📊</Text>
+              </TouchableOpacity>
+
+              {/* Microphone / Voice Note Recording Button */}
+              <TouchableOpacity
+                id="record-voice-btn"
+                style={[
+                  styles.toolBtn,
+                  {
+                    borderColor: spamLimiter.mediaLocked ? colors.border : colors.primary,
+                    opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
+                  },
+                ]}
+                disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
+                onPress={handleStartVoiceRecord}
+              >
+                <Text style={styles.toolIcon}>🎤</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Text Input Row */}
+            <View style={styles.composerRow}>
+              <TextInput
+                id="chat-message-input"
+                style={[
+                  styles.textInput,
+                  {
+                    backgroundColor: isDark ? '#050A0E' : '#F4F7F9',
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                  },
+                ]}
+                placeholder={
+                  spamLimiter.isInputLocked
+                    ? `Chat input locked (${spamLimiter.remainingSeconds}s remaining)`
+                    : 'Type a message or paste a link...'
+                }
+                placeholderTextColor={colors.textSecondary}
+                value={inputText}
+                onChangeText={setInputText}
+                editable={!spamLimiter.isInputLocked}
+                multiline={false}
+                onSubmitEditing={handleSendText}
+                returnKeyType="send"
+              />
+
+              <TouchableOpacity
+                id="chat-send-btn"
+                style={[
+                  styles.sendBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity:
+                      spamLimiter.isInputLocked ||
+                      spamLimiter.sendLocked ||
+                      inputText.trim().length === 0
+                        ? 0.4
+                        : 1,
+                  },
+                ]}
+                disabled={
+                  spamLimiter.isInputLocked ||
+                  spamLimiter.sendLocked ||
+                  inputText.trim().length === 0
+                }
+                onPress={handleSendText}
+              >
+                <Text style={styles.sendBtnText}>
+                  {spamLimiter.sendLocked ? `${spamLimiter.remainingSeconds}s` : '➤'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </KeyboardAvoidingView>
 
       {/* ─────────────────────────────────────────────────────────
           MODALS
@@ -1904,7 +1716,7 @@ const ChatScreen: React.FC = () => {
 
           {/* Tabs */}
           <View style={[styles.attachTabBar, { backgroundColor: colors.surface }]}>
-            {(['photo', 'video', 'doc'] as const).map((tab) => (
+            {(['photo', 'video', 'audio', 'doc'] as const).map((tab) => (
               <TouchableOpacity
                 key={tab}
                 style={[
@@ -1919,58 +1731,50 @@ const ChatScreen: React.FC = () => {
                     { color: attachTab === tab ? colors.primary : colors.textSecondary },
                   ]}
                 >
-                  {tab === 'photo' ? '📷 Photo' : tab === 'video' ? '🎬 Video' : '📄 Document'}
+                  {tab === 'photo' ? '📷 Photo' : tab === 'video' ? '🎬 Video' : tab === 'audio' ? '🎤 Audio' : '📄 Doc'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
           <ScrollView style={styles.attachModalBody}>
-            {isUploadingMedia && (
-              <View style={[styles.modalUploadingBox, { backgroundColor: colors.surface, borderColor: colors.primary }]}>
-                <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 10 }} />
-                <Text style={[styles.modalUploadingText, { color: colors.primary }]}>
-                  Uploading to Supabase Storage ('chat-media')...
-                </Text>
-              </View>
-            )}
             {/* TAB 1: Photo */}
             {attachTab === 'photo' && (
               <View style={styles.attachSection}>
                 <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                  Device Photo Pickers
+                  Attach Photo / Image URL
                 </Text>
-                <TouchableOpacity
-                  id="btn-chat-native-camera"
-                  style={[styles.customSendBtn, { backgroundColor: '#072E27', borderWidth: 1, borderColor: colors.primary, marginBottom: 8 }]}
-                  onPress={handleNativeCameraPhoto}
-                >
-                  <Text style={[styles.customSendBtnText, { color: colors.primary }]}>📸 Take Photo with Camera</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  id="btn-chat-native-gallery"
-                  style={[styles.customSendBtn, { backgroundColor: '#072E27', borderWidth: 1, borderColor: colors.primary, marginBottom: 18 }]}
-                  onPress={handleNativeLibraryPhoto}
-                >
-                  <Text style={[styles.customSendBtnText, { color: colors.primary }]}>🖼️ Choose Photo from Device Library</Text>
-                </TouchableOpacity>
-
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 12 }]}>
-                  Or Paste Custom Image URL
+                <Text style={[{ color: colors.textSecondary, fontSize: 12, marginBottom: 10 }]}>
+                  Paste any direct image link (.png, .jpg, .webp, .gif) to share in group chat.
                 </Text>
                 <TextInput
                   style={[styles.urlInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
-                  placeholder="https://example.com/image.png"
+                  placeholder="https://example.com/photo.jpg"
                   placeholderTextColor={colors.textSecondary}
                   value={customMediaUrl}
                   onChangeText={setCustomMediaUrl}
+                  autoCapitalize="none"
                 />
+
+                {customMediaUrl.trim().length > 6 && (
+                  <View style={{ marginTop: 14, alignItems: 'center' }}>
+                    <Text style={[{ color: colors.textSecondary, fontSize: 11, marginBottom: 6, fontWeight: '600' }]}>
+                      Live Image Preview
+                    </Text>
+                    <Image
+                      source={{ uri: customMediaUrl.trim() }}
+                      style={{ width: '100%', height: 180, borderRadius: 8, backgroundColor: '#050A0E' }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                )}
+
                 <TouchableOpacity
-                  style={[styles.customSendBtn, { backgroundColor: colors.primary }]}
+                  style={[styles.customSendBtn, { backgroundColor: colors.primary, opacity: customMediaUrl.trim() ? 1 : 0.4 }]}
                   disabled={!customMediaUrl.trim()}
-                  onPress={() => handleSendMedia('photo', customMediaUrl.trim(), 'custom_image.png')}
+                  onPress={() => handleSendMedia('photo', customMediaUrl.trim(), 'photo.jpg')}
                 >
-                  <Text style={styles.customSendBtnText}>Send Photo URL</Text>
+                  <Text style={styles.customSendBtnText}>Send Photo</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -1979,18 +1783,10 @@ const ChatScreen: React.FC = () => {
             {attachTab === 'video' && (
               <View style={styles.attachSection}>
                 <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                  Device Video Picker
+                  Attach Video URL
                 </Text>
-                <TouchableOpacity
-                  id="btn-chat-native-video"
-                  style={[styles.customSendBtn, { backgroundColor: '#072E27', borderWidth: 1, borderColor: colors.primary, marginBottom: 18 }]}
-                  onPress={handleNativePickVideo}
-                >
-                  <Text style={[styles.customSendBtnText, { color: colors.primary }]}>🎬 Pick Video from Device Storage</Text>
-                </TouchableOpacity>
-
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 12 }]}>
-                  Or Paste Custom Video URL
+                <Text style={[{ color: colors.textSecondary, fontSize: 12, marginBottom: 10 }]}>
+                  Paste any direct video stream or MP4 URL. Members can tap to watch in system player.
                 </Text>
                 <TextInput
                   style={[styles.urlInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
@@ -1998,33 +1794,53 @@ const ChatScreen: React.FC = () => {
                   placeholderTextColor={colors.textSecondary}
                   value={customMediaUrl}
                   onChangeText={setCustomMediaUrl}
+                  autoCapitalize="none"
                 />
                 <TouchableOpacity
-                  style={[styles.customSendBtn, { backgroundColor: colors.primary }]}
+                  style={[styles.customSendBtn, { backgroundColor: colors.primary, opacity: customMediaUrl.trim() ? 1 : 0.4 }]}
                   disabled={!customMediaUrl.trim()}
-                  onPress={() => handleSendMedia('video', customMediaUrl.trim(), 'custom_video.mp4', 15)}
+                  onPress={() => handleSendMedia('video', customMediaUrl.trim(), 'video.mp4', 15)}
                 >
                   <Text style={styles.customSendBtnText}>Send Video URL</Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* TAB 3: Document */}
+            {/* TAB 3: Audio */}
+            {attachTab === 'audio' && (
+              <View style={styles.attachSection}>
+                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
+                  Attach Audio / Voice Note URL
+                </Text>
+                <Text style={[{ color: colors.textSecondary, fontSize: 12, marginBottom: 10 }]}>
+                  Paste any direct audio link (.mp3, .m4a, .wav, or podcast clip).
+                </Text>
+                <TextInput
+                  style={[styles.urlInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
+                  placeholder="https://example.com/audio.mp3"
+                  placeholderTextColor={colors.textSecondary}
+                  value={customMediaUrl}
+                  onChangeText={setCustomMediaUrl}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  style={[styles.customSendBtn, { backgroundColor: colors.primary, opacity: customMediaUrl.trim() ? 1 : 0.4 }]}
+                  disabled={!customMediaUrl.trim()}
+                  onPress={() => handleSendMedia('voice', customMediaUrl.trim(), 'audio.mp3', 15)}
+                >
+                  <Text style={styles.customSendBtnText}>Send Audio Note</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* TAB 4: Document */}
             {attachTab === 'doc' && (
               <View style={styles.attachSection}>
                 <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                  Device Document Picker
+                  Attach Document Link (PDF, Doc, Archive)
                 </Text>
-                <TouchableOpacity
-                  id="btn-chat-native-doc"
-                  style={[styles.customSendBtn, { backgroundColor: '#072E27', borderWidth: 1, borderColor: colors.primary, marginBottom: 18 }]}
-                  onPress={handleNativePickDoc}
-                >
-                  <Text style={[styles.customSendBtnText, { color: colors.primary }]}>📂 Pick File from Device Storage</Text>
-                </TouchableOpacity>
-
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary, marginTop: 12 }]}>
-                  Or Attach Custom Document Link
+                <Text style={[{ color: colors.textSecondary, fontSize: 12, marginBottom: 10 }]}>
+                  Enter the file title and direct URL. Members can download or view it in their device viewer.
                 </Text>
                 <TextInput
                   style={[styles.urlInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
@@ -2039,15 +1855,22 @@ const ChatScreen: React.FC = () => {
                   placeholderTextColor={colors.textSecondary}
                   value={customMediaUrl}
                   onChangeText={setCustomMediaUrl}
+                  autoCapitalize="none"
                 />
                 <TouchableOpacity
-                  style={[styles.customSendBtn, { backgroundColor: colors.primary }]}
+                  style={[
+                    styles.customSendBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: customMediaUrl.trim() && customMediaName.trim() ? 1 : 0.4,
+                    },
+                  ]}
                   disabled={!customMediaUrl.trim() || !customMediaName.trim()}
                   onPress={() =>
                     handleSendDocument({
                       name: customMediaName.trim(),
                       url: customMediaUrl.trim(),
-                      mimeType: 'application/octet-stream',
+                      mimeType: customMediaName.trim().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
                       size: 1024 * 512,
                     })
                   }
@@ -2186,7 +2009,7 @@ const ChatScreen: React.FC = () => {
           )}
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -2197,13 +2020,23 @@ const ChatScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#050A0E',
+  },
+  messageStreamContainer: {
+    flex: 1,
+    backgroundColor: '#050A0E',
+  },
+  flatListContentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: TOP_SAFE_PADDING,
+    paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
@@ -2845,6 +2678,7 @@ const styles = StyleSheet.create({
   // ── Modals & Action Sheets ──
   modalOverlay: {
     flex: 1,
+    paddingTop: SAFE_TOP,
     backgroundColor: '#00000080',
     justifyContent: 'flex-end',
   },
@@ -3185,6 +3019,7 @@ const styles = StyleSheet.create({
   // ── Zoom Modal ──
   zoomModalContainer: {
     flex: 1,
+    paddingTop: SAFE_TOP,
     backgroundColor: '#000000F0',
     alignItems: 'center',
     justifyContent: 'center',

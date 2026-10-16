@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   FlatList,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -25,8 +26,10 @@ import {
 import { supabase, isSupabaseConfigured } from '../../services/supabase';
 import { fetchPosts } from '../../services/postsService';
 import { useTheme } from '../../context/ThemeContext';
-import { TOP_SAFE_PADDING } from '../../utils/layout';
+import { SAFE_TOP } from '../../utils/layout';
 import type { LeaderboardEntry, Profile } from '../../types/database';
+
+const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
 
 // ─────────────────────────────────────────────────────────────
 // Leaderboard Computation (inline, realtime-safe)
@@ -464,7 +467,7 @@ const createStyles = (
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: TOP_SAFE_PADDING,
+      paddingTop: 12,
       paddingBottom: 12,
       borderBottomWidth: 1,
       borderBottomColor: 'rgba(255, 255, 255, 0.07)',

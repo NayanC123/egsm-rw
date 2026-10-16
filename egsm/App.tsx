@@ -201,11 +201,14 @@ const AppShell: React.FC = () => {
   );
 };
 
+const SAFE_TOP = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
+
 const shellStyles = (c: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     safe: {
       flex: 1,
       backgroundColor: c.mainBackground,
+      paddingTop: SAFE_TOP,
     },
     content: { flex: 1 },
     dockContainer: {

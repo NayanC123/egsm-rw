@@ -5,9 +5,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // ─── Read env variables ───────────────────────────────────────────────────────
 // Expo exposes EXPO_PUBLIC_* vars on process.env at both build and runtime.
-// Dot-syntax access is required for Metro/Babel static variable inlining.
-const rawUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env['EXPO_PUBLIC_SUPABASE_URL'] || '';
-const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env['EXPO_PUBLIC_SUPABASE_ANON_KEY'] || '';
+// Dot-syntax access is strictly required for Metro/Babel static variable inlining.
+const rawUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const FALLBACK_URL = 'https://sonjftotjytdglgvvndj.supabase.co';
 const FALLBACK_KEY = 'sb_publishable_8oNr8W1bF701ZXPZXdwtSA_XZ6-Tsho';

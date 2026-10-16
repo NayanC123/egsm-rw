@@ -39,9 +39,13 @@ export async function fetchMessages(): Promise<MessageWithSender[]> {
 
     const profileMap = new Map<string, Pick<Profile, 'id' | 'username' | 'display_name' | 'role'>>();
     (profilesData || []).forEach((p: any) => {
-      profileMap.set(p.id, p);
-      if (p.username) {
+      if (p && p.id) {
+        profileMap.set(p.id, p);
+        profileMap.set(String(p.id).toLowerCase(), p);
+      }
+      if (p && p.username) {
         profileMap.set(p.username.toLowerCase(), p);
+        profileMap.set(p.username, p);
       }
     });
 
@@ -61,9 +65,18 @@ export async function fetchMessages(): Promise<MessageWithSender[]> {
 
     return messagesData.map((m: any) => {
       const senderProf = profileMap.get(m.sender_id) || profileMap.get(String(m.sender_id).toLowerCase());
-      const sender = senderProf
-        ? { id: senderProf.id, username: senderProf.username, display_name: senderProf.display_name }
-        : { id: m.sender_id, username: 'user', display_name: 'Community Member' };
+      const senderDisplayName =
+        (senderProf?.display_name && senderProf.display_name.trim()) ||
+        (senderProf?.username && `@${senderProf.username}`) ||
+        (m.sender?.display_name && m.sender.display_name.trim()) ||
+        (m.sender?.username && `@${m.sender.username}`) ||
+        (m.sender_id ? `@${String(m.sender_id).slice(0, 10)}` : 'User');
+
+      const sender = {
+        id: m.sender_id,
+        username: senderProf?.username || m.sender?.username || 'user',
+        display_name: senderDisplayName,
+      };
 
       return {
         ...m,
@@ -115,7 +128,11 @@ export async function sendMessage(params: SendMessageParams): Promise<MessageWit
 
     return {
       ...data,
-      sender: sender || { id: senderId, username: 'user', display_name: 'Community Member' },
+      sender: sender || {
+        id: senderId,
+        username: 'user',
+        display_name: senderId ? `@${String(senderId).slice(0, 10)}` : 'User',
+      },
     };
   } catch (e: any) {
     console.error('Supabase sendMessage exception:', e);
@@ -142,7 +159,7 @@ export async function createPoll(params: CreatePollParams): Promise<MessageWithS
   const defaultSender: Pick<Profile, 'id' | 'username' | 'display_name'> = sender || {
     id: senderId,
     username: 'user',
-    display_name: 'Community Member',
+    display_name: senderId ? `@${String(senderId).slice(0, 10)}` : 'User',
   };
 
   try {

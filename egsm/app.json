@@ -2,7 +2,7 @@
   "expo": {
     "name": "egsm",
     "slug": "egsm",
-    "version": "1.0.0",
+    "version": "2.0.5-beta",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -12,7 +12,8 @@
       "backgroundColor": "#050A0E"
     },
     "ios": {
-      "bundleIdentifier": "com.gruup.social",
+      "bundleIdentifier": "com.nayan.egsm",
+      "buildNumber": "2.0.5.1",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app requires access to your camera to take photos and share them in community posts and group discussions.",
@@ -20,8 +21,10 @@
         "NSMicrophoneUsageDescription": "This app requires access to your microphone to record voice messages in group discussions."
       }
     },
+    "newArchEnabled": false,
     "android": {
-      "package": "com.gruup.social",
+      "package": "com.nayan.egsm",
+      "versionCode": 20501,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#050A0E",
@@ -34,19 +37,10 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO",
-        "android.permission.RECORD_AUDIO"
+        "RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
-    "plugins": [
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "This app requires access to your photo library to share photos and media in community posts and group discussions.",
-          "cameraPermission": "This app requires access to your camera to take photos and share them in community posts and group discussions."
-        }
-      ]
-    ],
     "web": {
       "favicon": "./assets/favicon.png"
     },

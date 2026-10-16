@@ -52,9 +52,13 @@ export async function fetchPosts(currentUserId?: string): Promise<DetailedPost[]
 
     const profileMap = new Map<string, Pick<Profile, 'id' | 'username' | 'display_name' | 'role'>>();
     (profilesData || []).forEach((p: any) => {
-      profileMap.set(p.id, p);
-      if (p.username) {
+      if (p && p.id) {
+        profileMap.set(p.id, p);
+        profileMap.set(String(p.id).toLowerCase(), p);
+      }
+      if (p && p.username) {
         profileMap.set(p.username.toLowerCase(), p);
+        profileMap.set(p.username, p);
       }
     });
 
@@ -69,15 +73,22 @@ export async function fetchPosts(currentUserId?: string): Promise<DetailedPost[]
         .filter((r) => r.post_id === p.id)
         .map((r) => {
           const raterProf = profileMap.get(r.rater_id) || profileMap.get(String(r.rater_id).toLowerCase());
+          const raterDisplayName =
+            (raterProf?.display_name && raterProf.display_name.trim()) ||
+            (raterProf?.username && `@${raterProf.username}`) ||
+            (r.rater_id ? `@${String(r.rater_id).slice(0, 10)}` : 'User');
+
           return {
             id: r.id,
             post_id: r.post_id,
             rater_id: r.rater_id,
             score: r.score,
             created_at: r.created_at,
-            rater: raterProf
-              ? { id: raterProf.id, username: raterProf.username, display_name: raterProf.display_name }
-              : { id: r.rater_id, username: 'user', display_name: 'Member' },
+            rater: {
+              id: r.rater_id,
+              username: raterProf?.username || 'user',
+              display_name: raterDisplayName,
+            },
           };
         });
 
@@ -90,13 +101,18 @@ export async function fetchPosts(currentUserId?: string): Promise<DetailedPost[]
         : null;
 
       const authorProf = profileMap.get(p.author_id) || profileMap.get(String(p.author_id).toLowerCase());
-      const author = authorProf
-        ? { id: authorProf.id, username: authorProf.username, display_name: authorProf.display_name }
-        : {
-            id: p.author_id,
-            username: 'member',
-            display_name: 'Community Member',
-          };
+      const authorDisplayName =
+        (authorProf?.display_name && authorProf.display_name.trim()) ||
+        (authorProf?.username && `@${authorProf.username}`) ||
+        (p.author?.display_name && p.author.display_name.trim()) ||
+        (p.author?.username && `@${p.author.username}`) ||
+        (p.author_id ? `@${String(p.author_id).slice(0, 10)}` : 'User');
+
+      const author = {
+        id: p.author_id,
+        username: authorProf?.username || p.author?.username || 'user',
+        display_name: authorDisplayName,
+      };
 
       return {
         ...p,
@@ -276,11 +292,17 @@ export async function computeLeaderboard(): Promise<LeaderboardEntry[]> {
     let stat = authorStats.get(authorId);
     if (!stat) {
       const prof = profileMap.get(authorId) || profileMap.get(String(authorId).toLowerCase()) || p.author;
+      const authorDisplayName =
+        (prof?.display_name && prof.display_name.trim()) ||
+        (prof?.username && `@${prof.username}`) ||
+        (authorId ? `@${String(authorId).slice(0, 10)}` : 'User');
+      const authorUsername = prof?.username || 'user';
+
       stat = {
         profile: {
-          id: prof.id,
-          username: prof.username,
-          display_name: prof.display_name,
+          id: prof?.id || authorId,
+          username: authorUsername,
+          display_name: authorDisplayName,
         },
         totalPosts: 0,
         recentPosts: 0,

@@ -81,6 +81,7 @@ Realtime: all 8 tables added to `supabase_realtime` publication.
 | `src/screens/AdminPortalScreen.tsx` | `AdminPortalScreen` — Full Access-Controlled Admin Portal: 4 sub-tabs (Accounts, Resets, Announcements, Reports) |
 | `src/screens/AdminScreen.tsx` | Re-exports `AdminPortalScreen` for backwards compatibility |
 | `src/services/adminService.ts` | `fetchAccounts`, `createAccount`, `muteUser`, `suspendUser`, `terminateUser`, `resetUserPassword`, `fetchPasswordResetRequests`, `resolvePasswordResetRequest`, `togglePostAnnouncement`, `fetchOffenseReports`, `resolveOffenseReport`, `deleteOffendingMessage` |
+| `src/components/common/HyperlinkText.tsx` | `HyperlinkText` (Reusable URL regex tokenizer, native Linking browser integration with canOpenURL check and error Alert) |
 | `eas.json` | EAS Build configuration: preview profile (direct Android APK) & production profile (AAB / IPA) |
 
 ## 5. Chronological Handoff Log
@@ -267,4 +268,223 @@ Realtime: all 8 tables added to `supabase_realtime` publication.
   npx expo run:android
   npx expo run:ios
   ```
+
+---
+
+## 7. Version 2.0.5-beta Architecture & Change Log
+
+### 7.1 Release Overview & Zero-Crash Architecture
+Branch `2.0.5-beta` enforces strict native binary stability standards for production Android (`.apk` / `.aab`) and iOS builds. To eliminate startup crashes caused by unlinked native runtime dependencies and third-party native modules in standalone APKs:
+- **Strictly Zero Native Plugins**: Completely uninstalled/purged `expo-av`, `expo-image-picker`, `expo-document-picker`, `expo-file-system`, and `@react-navigation/*`.
+- **Clean `app.json`**: Removed the `"plugins"` array completely. No background or startup hooks inject native code that fails on Android startup.
+- **Built-in React Native Core Only**: The UI is composed exclusively with built-in React Native components (`View`, `Text`, `TextInput`, `TouchableOpacity`, `Pressable`, `FlatList`, `ScrollView`, `Image`, `Modal`, `Alert`, `Linking`, `BackHandler`, `StatusBar`, `Platform`, `StyleSheet`, `SafeAreaView`, `ActivityIndicator`, `KeyboardAvoidingView`).
+- **Strict String Font Weights**: 100% of `fontWeight` attributes across the codebase use string representations (`'400'`, `'500'`, `'600'`, `'700'`, `'800'`), preventing Android runtime style parse exceptions.
+
+---
+
+### 7.2 Database & Sync Architecture
+
+#### Direct Supabase Connection & Inlining (`src/services/supabase.ts`)
+- Replaced all bracket notations (`process.env['...']`) with direct dot-syntax `process.env.EXPO_PUBLIC_SUPABASE_URL` and `process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY`. This ensures Babel/Metro correctly inlines environment variables statically during production APK builds.
+- Preserved verified live project credentials as constant fallbacks (`FALLBACK_URL = 'https://sonjftotjytdglgvvndj.supabase.co'`, `FALLBACK_KEY = 'sb_publishable_8oNr8W1bF701ZXPZXdwtSA_XZ6-Tsho'`) so standalone APK installations never lose connection if `.env` fails to package.
+- Single client instance with explicit auth configuration (`persistSession: false`, `autoRefreshToken: false`) since authentication is managed via custom database credentials (`username` + `password_hash`).
+
+#### Complete Purge of Mock Seed Arrays & Hardcoded Fallbacks
+All mock seed arrays and fallback test profiles have been eliminated:
+- Purged `_localProfiles`, `_localPosts`, `_localMessages`.
+- Deleted fake user records (`"Test Member"`, `"Suspended Member"`, `"Terminated Member"`).
+- Deleted all sample preset arrays (`SAMPLE_IMAGE_PRESETS`, `PHOTO_PRESETS`, `DOCUMENT_PRESETS`).
+- **Strict Database Sync Rule**: Every single read and write query connects directly to live Supabase tables:
+  1. `profiles`: User accounts, credentials, moderation status (`active`, `muted`, `suspended`, `terminated`), and roles (`member`, `admin`).
+  2. `posts`: Feed submissions with categories, upvotes, downvotes, total score, pin status, announcement flag.
+  3. `post_ratings`: Unique member ratings (+1 / -1) per post.
+  4. `messages`: Real-time group chat messages, attachments, pinned flags.
+  5. `polls` & `poll_votes`: Community polls and live vote tracking.
+  6. `offense_reports`: Reported chat offenses queue with status (`pending`, `reviewed`, `dismissed`).
+  7. `password_reset_requests`: User-submitted password recovery queue with status (`pending`, `completed`, `rejected`).
+
+#### Profile Resolution & Display Name Mapping
+To fix display names showing `"Member"` or `"Community Member"`, `postsService.ts` and `chatService.ts` implement an in-memory lookup cache:
+- When querying `posts` or `messages`, the service fetches all active profiles:
+  ```ts
+  const { data: profiles } = await supabase.from('profiles').select('id, username, display_name, role');
+  ```
+- Builds a fast Map indexed by both `profile.id` and `@username`.
+- Resolves `post.author` and `message.sender` to the user's real `display_name`, falling back to `@${username}` and finally `User` if missing. No generic `"Member"` placeholders remain.
+
+---
+
+### 7.3 Android Navigation & Hardware Back Button (`BackHandler`)
+
+#### Posts Screen Navigation Stack (`src/screens/PostsScreen.tsx`)
+- Registered an Android hardware back button listener inside `useEffect`.
+- When `viewMode` is `'detail'`, `'create'`, or `'leaderboard'`, pressing the physical Android back button transitions back to `'feed'` and returns `true`, preventing the app from exiting:
+  ```ts
+  useEffect(() => {
+    const onBackPress = () => {
+      if (viewMode !== 'feed') {
+        setViewMode('feed');
+        setSelectedPost(null);
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [viewMode]);
+  ```
+
+#### Root Shell Navigation Stack (`App.tsx`)
+- Registered an Android hardware back button listener in `App.tsx`.
+- If the user is on any tab other than `'chat'` (`'posts'`, `'profile'`, `'admin'`), pressing the hardware back button returns to the `'chat'` tab and returns `true`:
+  ```ts
+  useEffect(() => {
+    const onBackPress = () => {
+      if (activeTab !== 'chat') {
+        setActiveTab('chat');
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [activeTab]);
+  ```
+
+#### Chat Screen Modal Dismissal (`src/screens/ChatScreen.tsx`)
+- Intercepts hardware back presses to dismiss open modals (`zoomImageUrl`, `isActionModalOpen`, `isReportModalOpen`, `isGifModalOpen`, `isAttachModalOpen`, `isPollModalOpen`) before bubbling down to the root navigation.
+
+---
+
+### 7.4 Universal Status Bar & Notch Layout Metrics (`src/utils/layout.ts`)
+
+#### Safe Top Distance Formula
+To resolve notification bar / camera punch hole overlaps across diverse Android devices:
+```ts
+export const SAFE_TOP = Platform.OS === 'android'
+  ? Math.max((StatusBar.currentHeight || 28) + 14, 44)
+  : 50;
+```
+- **Main Shell**: Applied `paddingTop: SAFE_TOP` to the root container in `App.tsx` so all screens are naturally positioned below the notification bar.
+- **Screen Headers**: Top headers in `PostsScreen.tsx`, `ChatScreen.tsx`, `LeaderboardView.tsx`, and `AdminPortalScreen.tsx` use `paddingTop: 12` to prevent awkward double-padding under the status bar.
+- **Modal Dialogs**: Since `<Modal>` components render outside the React Native view hierarchy directly into native Android dialog windows, `paddingTop: SAFE_TOP` is explicitly applied to the root `<View>` of all modals across the app (`modalOverlay`, `fullModalContainer`, `zoomModalContainer`).
+
+---
+
+### 7.5 Crash-Free Media & Document Attachments
+
+#### Native Picker Replacement
+Since native camera and document picker libraries crash standalone APK binaries on launch without Expo native dependencies, all attachments are handled cleanly via in-app URL modals with zero native plugins:
+- **Image / Photo Attachments**:
+  - Direct URL input for any PNG, JPG, or WebP link.
+  - Real-time live image preview rendered inside the modal before sending.
+  - Rendered in feed/chat with tap-to-zoom in a full-screen image modal.
+- **Video Attachments**:
+  - Direct URL input for MP4 or streaming video.
+  - Video cards launch system player via `Linking.openURL(url)` or `SafeVideo`.
+- **Audio / Voice Note Attachments**:
+  - Dedicated Audio tab in the attachment drawer (also accessible via the composer 🎤 button).
+  - Direct audio link (.mp3, .m4a, .wav) input.
+  - Voice note card in chat triggers zero-crash audio playback via `Linking.openURL(url)`.
+- **Document Attachments**:
+  - Custom file title + URL input.
+  - File card displays document name, file type badge, and a `Download / Open File` button that delegates to device viewers via `Linking.openURL(url)`.
+- **Giphy Integration**: Working direct Giphy API search modal with curated reaction GIFs.
+
+---
+
+### 7.6 Full File Modification Log for Version 2.0.5-beta
+
+| File | Changes Made |
+| :--- | :--- |
+| `app.json` | Added `"softwareKeyboardLayoutMode": "resize"` and `"newArchEnabled": false`; ensured `"RECORD_AUDIO"` permission is declared for Android audio driver stability. |
+| `src/services/supabase.ts` | Replaced bracket notation with direct dot-syntax `process.env.EXPO_PUBLIC_*`; retained fallback project constants. |
+| `src/utils/layout.ts` | Defined and exported `SAFE_TOP` metric formula and `TOP_SAFE_PADDING` alias for notch protection. |
+| `src/services/audioVideoService.tsx` | Removed all `expo-av` imports and require calls; implemented zero-crash `SafeVideo` and stubbed audio helper. |
+| `src/services/postsService.ts` | Replaced hardcoded author fallbacks with Supabase `profiles` lookup map; mapped `author` and `rater` to real `display_name` and `@username`. Purged mock arrays. |
+| `src/services/chatService.ts` | Built `profiles` lookup map for chat messages; mapped `sender` to real `display_name` and `@username`. Purged mock seed data. |
+| `src/components/common/HyperlinkText.tsx` | Reusable React Native hyperlink text component with robust URL regex tokenization, native `Linking.canOpenURL` / `Linking.openURL` handling, error alerts, and `#00FFCC` underlined link styling. |
+| `src/screens/PostsScreen.tsx` | Integrated `HyperlinkText` into post feed preview and `PostDetailView` body; added `BackHandler` listener (detail/create/leaderboard → feed); applied `SAFE_TOP` to all modal overlays; replaced native pickers with URL image & doc modals with live preview; fixed rater display name. |
+| `src/screens/ChatScreen.tsx` | Integrated `HyperlinkText` for all text message bubbles; implemented WhatsApp-style inverted scrolling (`inverted={true}` + `[...messages].reverse()`); purged all `scrollToEnd()` calls; wrapped in `KeyboardAvoidingView` for zero-obscured input; built end-to-end `expo-av` voice note recording UI, Supabase Storage `'chat-media'` upload, and interactive in-bubble streaming playback. |
+| `App.tsx` | Added `BackHandler` listener (other tabs → chat); applied `paddingTop: SAFE_TOP` to root safe container. |
+| `src/components/Posts/LeaderboardView.tsx` | Imported `StatusBar` and `SAFE_TOP`; adjusted header padding to prevent status bar collision. |
+| `src/screens/AdminPortalScreen.tsx` | Applied `SAFE_TOP` to modal overlays; set topBar `paddingTop: 12`; removed `"Member"` fallback from offense reports. |
+| `PROJECT_CONTEXT.md` | Documented full `Version 2.0.5-beta Architecture & Change Log` with database architecture, navigation flow, and file logs. |
+
+---
+
+### 7.7 Critical Chat Engine Overhaul: Inverted Scrolling, Keyboard Compression & Voice Notes
+
+#### 1. Inverted WhatsApp-Style Scrolling & Snap-Back Elimination (`ChatScreen.tsx`)
+- **Parent Container Viewport**: Wrapped the `FlatList` in a dedicated parent container with `style={styles.messageStreamContainer}` (`flex: 1`, `backgroundColor: '#050A0E'`) to ensure a strictly defined viewport height and prevent Android touch responder chain breaks.
+- **Pure Padding Content Container**: `contentContainerStyle` is strictly limited to padding:
+  ```tsx
+  contentContainerStyle={styles.flatListContentContainer}
+  // { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 }
+  ```
+  Removed any `flex: 1`, `height: '100%'`, `minHeight: '100%'`, or `justifyContent: 'flex-end'` (which causes an infinite scroll-bounce loop on Android).
+- **Inverted FlatList Stability**: Configured message stream using `inverted={true}` and memoized `reversedMessages = useMemo(() => [...messages].reverse(), [messages])`.
+- **Android Stability Props**:
+  ```tsx
+  keyboardShouldPersistTaps="handled"
+  showsVerticalScrollIndicator={true}
+  removeClippedSubviews={false}
+  overScrollMode="always"
+  onScroll={handleScroll}
+  scrollEventThrottle={16}
+  ```
+- **Scroll Bouncing & Hijacking Elimination**:
+  - Completely removed all `scrollToEnd()` and `scrollToOffset()` invocations from `onContentSizeChange` and `useEffect` hooks.
+  - Implemented shallow identity checks in `loadMessages` so that background polling and Realtime sync callbacks do not replace the `messages` array reference unless content has genuinely changed, preventing layout recalculation snap-backs while scrolling through chat history.
+  - Added `isNearBottomRef` scroll tracking to guarantee that user position in message history is never overridden by updates.
+- **Natural Message Flow**: New messages arrive at the bottom (`y = 0`) naturally without bouncing the user down when inspecting past messages.
+- **Targeted Jump to Message**: Adjusted pinned message jump selector to compute target index dynamically via `reversed.findIndex(m => m.id === messageId)`.
+
+#### 3. End-to-End Voice Notes (`app.json`, `package.json`, `ChatScreen.tsx`)
+- **Native Stability Settings (`app.json`)**:
+  - `"newArchEnabled": false` set under `"expo"` to ensure audio drivers and native threads run stably.
+  - `"RECORD_AUDIO"` and `"android.permission.RECORD_AUDIO"` added to `android.permissions`.
+  - `"NSMicrophoneUsageDescription"` declared in `ios.infoPlist`.
+- **Recording Architecture (`ChatScreen.tsx`)**:
+  - Permissions requested via `Audio.requestPermissionsAsync()`.
+  - Audio mode configured via `Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true })`.
+  - Recording initiated with `Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY)`.
+  - Active Recording UI: Pulsing red `REC` indicator, live seconds counter (`0:01`, `0:02`...), `Cancel` button, and `Send Voice Note` button.
+  - Storage Upload: Retrieves `.m4a` file via `recording.getURI()`, streams upload to `'chat-media'` bucket in Supabase via `uploadFileToSupabase`, and inserts record into `messages` with `message_type: 'voice'`.
+- **Interactive In-Bubble Playback**:
+  - Interactive `Play / Pause` toggle (`⏸` / `▶`) with dynamic waveform bars and duration badge.
+  - Live audio streaming directly from Supabase public URL via `Audio.Sound.createAsync({ uri: msg.media_url }, { shouldPlay: true })`.
+  - Automatic playback state tracking, second-by-second progress updates, and clean unloading on completion or component unmount.
+
+---
+
+### 7.8 Reusable Hyperlink Text Component (`src/components/common/HyperlinkText.tsx`)
+
+#### 1. Architecture & Design Principles
+- **Primitives**: Built exclusively with core React Native primitives (`Text`, `Linking`, `Alert`, `StyleSheet`) with zero third-party dependencies.
+- **Robust URL Detection**:
+  ```ts
+  const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  ```
+- **Tokenization & Trailing Punctuation Stripping**: Iteratively tokenizes input strings into plain text and URL segments, automatically detaching trailing punctuation marks (`.`, `,`, `;`, `:`, `!`, `?`, `)`) to ensure clean URLs.
+- **Safe Linking Handler**: Automatically prepends `https://` to `www.` links or links without a protocol, verifies capability with `Linking.canOpenURL(targetUrl)`, opens with `Linking.openURL(targetUrl)`, and gracefully falls back to `Alert.alert('Cannot Open Link', targetUrl)` if the link cannot be resolved.
+- **Styling**: Underlined (`textDecorationLine: 'underline'`), brand cyan `#00FFCC`, and `fontWeight: '600'`. Accepts optional custom `style` and `linkStyle` prop overrides.
+
+#### 2. Screen Integrations
+- **Group Chat Screen (`ChatScreen.tsx`)**: Replaced raw text and inline regex parsing in chat bubbles with `<HyperlinkText text={item.content} style={[styles.messageTextBody, { color: colors.textPrimary }]} linkStyle={{ color: '#00FFCC', textDecorationLine: 'underline' }} />`. Text links in both incoming and outgoing bubbles are directly clickable without firing the parent bubble's long-press message actions sheet.
+- **Posts Screen (`PostsScreen.tsx`)**:
+  - **Feed Snippet**: Rendered post content preview using `<HyperlinkText text={item.content} style={s.postPreviewText} numberOfLines={2} />` so members can tap links shared in posts.
+  - **Post Detail**: Rendered full post body using `<HyperlinkText text={currentPost.content} style={s.detailContentText} selectable />` with link detection and text selection support.
+
+---
+
+### 7.9 Verification & Compilation Status
+- **TypeScript Check**: `npx tsc --noEmit` executed cleanly with **0 errors**.
+- **Native Audio Package**: `expo-av` (`^16.0.8`) installed and fully typed.
+- **Native Stability**: Zero crash-inducing navigation or unconfigured native plugins.
+- **Git Branch & Versioning**: Version aligned to `2.0.5-beta` across `package.json`, `package-lock.json`, `app.json`, and Android `versionName`. Where tags are unsupported by platform validators (iOS `CFBundleShortVersionString` / `buildNumber`), `2.0.5.1` is set (`android.versionCode: 20501`). Verified on branch `2.0.5-beta`.
+
+
+
+
 

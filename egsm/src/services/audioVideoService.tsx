@@ -1,55 +1,30 @@
 // src/services/audioVideoService.tsx
-// Safe dynamic wrapper around expo-av with zero-crash fallbacks.
-// If ExponentAV native module is missing (e.g. running in Expo Go),
-// the app runs cleanly without [runtime not ready] boot crashes.
-
+// Completely zero-plugin crash-free implementation. No expo-av, no native crashes on boot.
 import React from 'react';
 import { View, Text, TouchableOpacity, Linking, StyleSheet } from 'react-native';
 
-let NativeAudio: any = null;
-let NativeVideo: any = null;
-let NativeResizeMode: any = null;
-let isNativeAVAvailable: boolean = false;
-
-try {
-  // Dynamically require expo-av inside try/catch so Metro doesn't throw at boot
-  // if ExponentAV native module is missing from the client binary (e.g. Expo Go).
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const ExpoAV = require('expo-av');
-  if (ExpoAV && ExpoAV.Audio) {
-    NativeAudio = ExpoAV.Audio;
-    NativeVideo = ExpoAV.Video;
-    NativeResizeMode = ExpoAV.ResizeMode;
-    isNativeAVAvailable = true;
-  }
-} catch (err) {
-  // ExponentAV native module is not linked in this runtime (e.g. Expo Go)
-  isNativeAVAvailable = false;
-}
-
-export { isNativeAVAvailable };
+export const isNativeAVAvailable: boolean = false;
 
 /**
- * Returns the native Audio module if available in this runtime, otherwise null.
+ * Returns null — voice playback & recording uses pure React Native and Linking.openURL without native plugins.
  */
 export function getNativeAudio(): any | null {
-  return NativeAudio;
+  return null;
 }
 
 /**
  * Safe ResizeMode enum / object
  */
 export const SafeResizeMode = {
-  CONTAIN: NativeResizeMode?.CONTAIN || 'contain',
-  COVER: NativeResizeMode?.COVER || 'cover',
-  STRETCH: NativeResizeMode?.STRETCH || 'stretch',
+  CONTAIN: 'contain',
+  COVER: 'cover',
+  STRETCH: 'stretch',
 };
 
 /**
- * Fallback Video player component used when native ExponentAV is not compiled into the runtime (Expo Go).
- * Renders a clean video card that launches the video in the system/native player via Linking.openURL.
+ * Clean Video player component that launches the video in the system player via Linking.openURL.
  */
-const FallbackVideoPlayer: React.FC<{
+export const SafeVideo: React.FC<{
   source: { uri: string };
   style?: any;
   useNativeControls?: boolean;
@@ -70,18 +45,6 @@ const FallbackVideoPlayer: React.FC<{
       </TouchableOpacity>
     </View>
   );
-};
-
-/**
- * Safe Video component:
- * Uses native expo-av Video if available; otherwise renders the fallback player.
- */
-export const SafeVideo: React.FC<any> = (props) => {
-  if (isNativeAVAvailable && NativeVideo) {
-    const Component = NativeVideo;
-    return <Component {...props} />;
-  }
-  return <FallbackVideoPlayer {...props} />;
 };
 
 const styles = StyleSheet.create({
@@ -111,7 +74,7 @@ const styles = StyleSheet.create({
   playIconText: {
     color: '#00FFCC',
     fontSize: 20,
-    marginLeft: 3, // visual optical center
+    marginLeft: 3,
   },
   fallbackTitle: {
     color: '#FFFFFF',

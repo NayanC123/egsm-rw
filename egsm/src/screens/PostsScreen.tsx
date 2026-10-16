@@ -18,10 +18,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
+  StatusBar,
   BackHandler,
   KeyboardAvoidingView,
 } from 'react-native';
-import { TOP_SAFE_PADDING } from '../utils/layout';
+import { SAFE_TOP } from '../utils/layout';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase, isSupabaseConfigured } from '../services/supabase';
@@ -35,9 +36,9 @@ import {
 } from '../services/postsService';
 import type { DocumentAttachment } from '../types/database';
 import LeaderboardView from '../components/Posts/LeaderboardView';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import { uploadFileToSupabase } from '../services/storageService';
+import { HyperlinkText } from '../components/common/HyperlinkText';
+
+const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
 
 type PostsPageState = 'feed' | 'detail' | 'create' | 'leaderboard';
 
@@ -331,119 +332,6 @@ const PostsScreen: React.FC = () => {
     setAttachedDocs((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ── Native Device Picker Handlers (Wrapped in try/catch) ──
-  const handleNativePickImageFromLibrary = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Media library access is required to select photos from your device.'
-        );
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setIsUploading(true);
-        try {
-          const publicUrl = await uploadFileToSupabase(
-            asset.uri,
-            asset.fileName || 'post_image.jpg',
-            asset.mimeType || 'image/jpeg',
-            'post-attachments'
-          );
-          addImageAttachment(publicUrl);
-          setImageModalVisible(false);
-        } catch (uploadErr: any) {
-          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload image.');
-        } finally {
-          setIsUploading(false);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[PostsScreen ImagePicker Error]:', err);
-      Alert.alert('Picker Error', err?.message || 'Could not pick image from device.');
-    }
-  };
-
-  const handleNativeTakePhotoWithCamera = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Camera Permission Required',
-          'Camera access is required to take photos.'
-        );
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setIsUploading(true);
-        try {
-          const publicUrl = await uploadFileToSupabase(
-            asset.uri,
-            asset.fileName || 'camera_photo.jpg',
-            asset.mimeType || 'image/jpeg',
-            'post-attachments'
-          );
-          addImageAttachment(publicUrl);
-          setImageModalVisible(false);
-        } catch (uploadErr: any) {
-          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload photo.');
-        } finally {
-          setIsUploading(false);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[PostsScreen Camera Error]:', err);
-      Alert.alert('Camera Error', err?.message || 'Could not capture photo.');
-    }
-  };
-
-  const handleNativePickDocument = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: true,
-      });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setIsUploading(true);
-        try {
-          const publicUrl = await uploadFileToSupabase(
-            asset.uri,
-            asset.name || 'document.bin',
-            asset.mimeType || 'application/octet-stream',
-            'post-attachments'
-          );
-          addDocumentAttachment({
-            name: asset.name || 'document.bin',
-            url: publicUrl,
-            mimeType: asset.mimeType || 'application/octet-stream',
-            size: asset.size || 0,
-          });
-          setDocModalVisible(false);
-        } catch (uploadErr: any) {
-          Alert.alert('Upload Error', uploadErr?.message || 'Failed to upload document.');
-        } finally {
-          setIsUploading(false);
-        }
-      }
-    } catch (err: any) {
-      console.warn('[PostsScreen DocumentPicker Error]:', err);
-      Alert.alert('Document Picker Error', err?.message || 'Could not pick document from device.');
-    }
-  };
-
   // ─────────────────────────────────────────────────────────────
   // Styles Factory
   // ─────────────────────────────────────────────────────────────
@@ -545,9 +433,11 @@ const PostsScreen: React.FC = () => {
                   </Text>
 
                   {/* Content Preview */}
-                  <Text style={s.postPreviewText} numberOfLines={2}>
-                    {item.content}
-                  </Text>
+                  <HyperlinkText
+                    text={item.content}
+                    style={s.postPreviewText}
+                    numberOfLines={2}
+                  />
 
                   {/* Footer Row: Attachments & Satisfaction Rate */}
                   <View style={s.postFooterRow}>
@@ -800,35 +690,10 @@ const PostsScreen: React.FC = () => {
         >
           <View style={s.modalOverlay}>
             <View style={s.pickerModalBox}>
-              <Text style={s.pickerModalTitle}>📷 Attach Image</Text>
+              <Text style={s.pickerModalTitle}>📷 Attach Image URL</Text>
               <Text style={s.pickerModalSubtitle}>
-                Select an image from your device or enter a direct image URL:
+                Enter a direct image link (PNG, JPG, WebP, GIF) to attach to your post:
               </Text>
-
-              {isUploading && (
-                <View style={s.modalUploadingBox}>
-                  <ActivityIndicator color={colors.primary} size="small" style={{ marginRight: 8 }} />
-                  <Text style={s.modalUploadingText}>Uploading to Supabase Storage...</Text>
-                </View>
-              )}
-
-              {/* Native Device Pickers */}
-              <TouchableOpacity
-                id="btn-native-camera"
-                style={s.nativePickerButton}
-                onPress={handleNativeTakePhotoWithCamera}
-              >
-                <Text style={s.nativePickerText}>📸 Capture Photo with Camera</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                id="btn-native-gallery"
-                style={s.nativePickerButton}
-                onPress={handleNativePickImageFromLibrary}
-              >
-                <Text style={s.nativePickerText}>🖼️ Choose Photo from Device Library</Text>
-              </TouchableOpacity>
-
-              <Text style={s.orDividerText}>── OR INSERT IMAGE URL ──</Text>
 
               {/* Custom URL Input */}
               <TextInput
@@ -840,13 +705,24 @@ const PostsScreen: React.FC = () => {
                 onChangeText={setCustomImageUrl}
                 autoCapitalize="none"
               />
+
+              {customImageUrl.trim().startsWith('http') && (
+                <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                  <Image
+                    source={{ uri: customImageUrl.trim() }}
+                    style={{ width: 140, height: 90, borderRadius: 8, backgroundColor: '#050A0E' }}
+                    resizeMode="cover"
+                  />
+                </View>
+              )}
+
               <TouchableOpacity
                 id="btn-confirm-custom-image"
                 style={[s.modalActionButton, !customImageUrl.trim() && s.buttonDisabled]}
                 disabled={!customImageUrl.trim()}
                 onPress={() => addImageAttachment(customImageUrl)}
               >
-                <Text style={s.modalActionText}>Add Image URL</Text>
+                <Text style={s.modalActionText}>Add Image Attachment</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -868,28 +744,10 @@ const PostsScreen: React.FC = () => {
         >
           <View style={s.modalOverlay}>
             <View style={s.pickerModalBox}>
-              <Text style={s.pickerModalTitle}>📎 Attach Document</Text>
+              <Text style={s.pickerModalTitle}>📎 Attach Document URL</Text>
               <Text style={s.pickerModalSubtitle}>
-                Select a document from your device storage or enter a download URL:
+                Enter document name and link (PDF, Audio, Document) to attach:
               </Text>
-
-              {isUploading && (
-                <View style={s.modalUploadingBox}>
-                  <ActivityIndicator color={colors.primary} size="small" style={{ marginRight: 8 }} />
-                  <Text style={s.modalUploadingText}>Uploading to Supabase Storage...</Text>
-                </View>
-              )}
-
-              {/* Native Document Picker */}
-              <TouchableOpacity
-                id="btn-native-document-picker"
-                style={s.nativePickerButton}
-                onPress={handleNativePickDocument}
-              >
-                <Text style={s.nativePickerText}>📂 Pick File from Device Storage</Text>
-              </TouchableOpacity>
-
-              <Text style={s.orDividerText}>── OR ATTACH CUSTOM URL ──</Text>
 
               {/* Custom Document Entry */}
               <TextInput
@@ -903,7 +761,7 @@ const PostsScreen: React.FC = () => {
               <TextInput
                 id="input-custom-doc-url"
                 style={s.pickerInput}
-                placeholder="Document download URL (https://...)"
+                placeholder="Download URL (https://...)"
                 placeholderTextColor="#4B5A68"
                 value={customDocUrl}
                 onChangeText={setCustomDocUrl}
@@ -920,12 +778,12 @@ const PostsScreen: React.FC = () => {
                   addDocumentAttachment({
                     name: customDocName.trim(),
                     url: customDocUrl.trim(),
-                    mimeType: 'application/pdf',
-                    size: 1024 * 500, // 500 KB default
+                    mimeType: customDocName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
+                    size: 1024 * 500,
                   })
                 }
               >
-                <Text style={s.modalActionText}>Add Document</Text>
+                <Text style={s.modalActionText}>Add Document Attachment</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1048,9 +906,11 @@ const PostsScreen: React.FC = () => {
 
           {/* Post Content (full body text with selectable / link support) */}
           <View style={s.detailContentCard}>
-            <Text style={s.detailContentText} selectable>
-              {currentPost.content}
-            </Text>
+            <HyperlinkText
+              text={currentPost.content}
+              style={s.detailContentText}
+              selectable
+            />
           </View>
 
           {/* Attached Images Gallery */}
@@ -1197,7 +1057,7 @@ const PostsScreen: React.FC = () => {
                   <View key={`other-rating-${rating.id}`} style={s.ratingRowCard}>
                     <View style={s.raterInfo}>
                       <Text style={s.raterDisplayName}>
-                        {rating.rater?.display_name || 'Member'}
+                        {rating.rater?.display_name || (rating.rater?.username ? `@${rating.rater.username}` : 'User')}
                       </Text>
                       <Text style={s.raterUsername}>
                         @{rating.rater?.username || 'user'} • {formatTime(rating.created_at)}
@@ -1297,7 +1157,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: TOP_SAFE_PADDING,
+      paddingTop: 12,
       paddingBottom: 12,
       borderBottomWidth: 1,
       borderBottomColor: 'rgba(255, 255, 255, 0.07)',
@@ -2028,10 +1888,11 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       backgroundColor: '#000000FA',
       justifyContent: 'center',
       alignItems: 'center',
+      paddingTop: SAFE_TOP,
     },
     fullscreenCloseButton: {
       position: 'absolute',
-      top: TOP_SAFE_PADDING,
+      top: SAFE_TOP,
       right: 20,
       zIndex: 10,
       backgroundColor: '#FFFFFF33',
@@ -2056,7 +1917,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
-      paddingTop: TOP_SAFE_PADDING,
+      paddingTop: SAFE_TOP,
     },
     pickerModalBox: {
       backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
@@ -2102,61 +1963,6 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
       color: '#050A0E',
       fontSize: 15,
       fontWeight: '700',
-    },
-    presetSectionLabel: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: '#7E8E9C',
-      marginBottom: 8,
-    },
-    presetRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: 'rgba(255, 255, 255, 0.07)',
-    },
-    presetThumb: {
-      width: 36,
-      height: 36,
-      borderRadius: 6,
-      marginRight: 10,
-    },
-    presetLabel: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: c.textPrimary,
-      flex: 1,
-    },
-    presetDocEmoji: {
-      fontSize: 22,
-      marginRight: 10,
-    },
-    presetDocMeta: {
-      fontSize: 12,
-      color: '#7E8E9C',
-      marginTop: 2,
-    },
-    nativePickerButton: {
-      backgroundColor: 'rgba(0, 255, 204, 0.08)',
-      borderColor: 'rgba(0, 255, 204, 0.25)',
-      borderWidth: 1,
-      borderRadius: 14,
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    nativePickerText: {
-      color: '#00FFCC',
-      fontSize: 13,
-      fontWeight: '700',
-    },
-    orDividerText: {
-      textAlign: 'center',
-      fontSize: 11,
-      color: '#7E8E9C',
-      marginVertical: 10,
-      fontWeight: '600',
     },
     modalCloseButton: {
       marginTop: 14,

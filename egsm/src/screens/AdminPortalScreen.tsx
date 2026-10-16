@@ -20,10 +20,13 @@ import {
   StyleSheet,
   ActivityIndicator,
   Platform,
+  StatusBar,
   BackHandler,
   KeyboardAvoidingView,
 } from 'react-native';
-import { TOP_SAFE_PADDING } from '../utils/layout';
+import { SAFE_TOP } from '../utils/layout';
+
+const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -982,7 +985,7 @@ export const AdminPortalScreen: React.FC = () => {
               </View>
 
               <Text style={s.offenseReporterText}>
-                Reporter: {rep.reporter?.display_name || 'Member'} (@{rep.reporter?.username || 'reporter'})
+                Reporter: {rep.reporter?.display_name || (rep.reporter?.username ? `@${rep.reporter.username}` : 'User')} (@{rep.reporter?.username || 'reporter'})
               </Text>
 
               {/* Offending Message Box */}
@@ -1420,7 +1423,7 @@ const adminStyles = (c: ReturnType<typeof useTheme>['colors']) =>
       borderBottomWidth: 1,
       borderBottomColor: c.border,
       paddingHorizontal: 16,
-      paddingTop: TOP_SAFE_PADDING,
+      paddingTop: 12,
       paddingBottom: 12,
     },
     topBarLeft: {
@@ -2105,7 +2108,7 @@ const adminStyles = (c: ReturnType<typeof useTheme>['colors']) =>
       justifyContent: 'center',
       alignItems: 'center',
       padding: 20,
-      paddingTop: TOP_SAFE_PADDING,
+      paddingTop: SAFE_TOP,
     },
     modalBox: {
       width: '100%',
