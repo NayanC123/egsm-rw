@@ -44,10 +44,7 @@ import type {
   MessageType,
   MediaMeta,
 } from '../types/database';
-import { SafeVideo, SafeResizeMode } from '../services/audioVideoService';
 import { SAFE_TOP } from '../utils/layout';
-import { Audio } from 'expo-av';
-import { uploadFileToSupabase } from '../services/storageService';
 import { HyperlinkText } from '../components/common/HyperlinkText';
 
 const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
@@ -154,18 +151,7 @@ const ChatScreen: React.FC = () => {
   const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
   const [customMediaName, setCustomMediaName] = useState<string>('');
 
-  // Voice Note Recording
-  const [isRecordingVoice, setIsRecordingVoice] = useState<boolean>(false);
-  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
 
-  // Voice Playback
-  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
-  const [playbackSeconds, setPlaybackSeconds] = useState<number>(0);
-  const soundRef = useRef<Audio.Sound | null>(null);
-
-  // Uploading State
-  const [isUploadingMedia, setIsUploadingMedia] = useState<boolean>(false);
 
   // Create Poll Modal
   const [isPollModalOpen, setIsPollModalOpen] = useState<boolean>(false);
@@ -261,31 +247,7 @@ const ChatScreen: React.FC = () => {
     isPollModalOpen,
   ]);
 
-  // ─── Voice Recording Timer ─────────────────────────────────
-  useEffect(() => {
-    let timer: any = null;
-    if (isRecordingVoice) {
-      setRecordingSeconds(0);
-      timer = setInterval(() => {
-        setRecordingSeconds((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isRecordingVoice]);
 
-  // ─── Voice Playback Cleanup ─────────────────────────────────
-  useEffect(() => {
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => {});
-      }
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
-      }
-    };
-  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -503,147 +465,7 @@ const ChatScreen: React.FC = () => {
     }
   };
 
-  // ── Voice Recording & Playback ──────────────────────────────
-  const handleStartVoiceRecord = async () => {
-    if (spamLimiter.mediaLocked || spamLimiter.isInputLocked) return;
 
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Microphone permission is required to record voice notes.');
-        return;
-      }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      recordingRef.current = recording;
-      setIsRecordingVoice(true);
-    } catch (err: any) {
-      console.error('Failed to start recording:', err);
-      Alert.alert('Recording Error', err?.message || 'Could not start recording.');
-    }
-  };
-
-  const handleCancelVoiceRecord = async () => {
-    setIsRecordingVoice(false);
-    setRecordingSeconds(0);
-    if (recordingRef.current) {
-      try {
-        await recordingRef.current.stopAndUnloadAsync();
-      } catch (e) {}
-      recordingRef.current = null;
-    }
-  };
-
-  const handleSendVoiceNote = async () => {
-    if (!user) return;
-    const duration = Math.max(1, recordingSeconds);
-    setIsRecordingVoice(false);
-    const recording = recordingRef.current;
-    if (!recording) return;
-
-    try {
-      setIsUploadingMedia(true);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      recordingRef.current = null;
-
-      if (!uri) throw new Error('Could not retrieve recording URI.');
-
-      const cleanFilename = `voice_${Date.now()}.m4a`;
-      const publicUrl = await uploadFileToSupabase(uri, cleanFilename, 'audio/m4a', 'chat-media');
-
-      const allowed = spamLimiter.checkMessage('Voice Note', true);
-      if (!allowed) return;
-
-      const newMsg = await sendMessage({
-        senderId: user.id,
-        sender: {
-          id: user.id,
-          username: user.username,
-          display_name: user.display_name,
-        },
-        content: `Voice Message (${duration}s)`,
-        messageType: 'voice',
-        mediaUrl: publicUrl,
-        mediaMeta: {
-          duration,
-          filename: cleanFilename,
-        },
-      });
-      spamLimiter.recordMediaSend();
-      setMessages((prev) => [...prev, newMsg]);
-    } catch (err: any) {
-      console.error('Failed to send voice note:', err);
-      Alert.alert('Upload Error', err?.message || 'Failed to send voice note.');
-    } finally {
-      setIsUploadingMedia(false);
-      setRecordingSeconds(0);
-    }
-  };
-
-  const handleTogglePlayVoice = async (msg: MessageWithSender) => {
-    if (!msg.media_url) return;
-
-    if (playingVoiceId === msg.id) {
-      if (soundRef.current) {
-        try {
-          await soundRef.current.stopAsync();
-          await soundRef.current.unloadAsync();
-        } catch (e) {}
-        soundRef.current = null;
-      }
-      setPlayingVoiceId(null);
-      setPlaybackSeconds(0);
-      return;
-    }
-
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-      } catch (e) {}
-      soundRef.current = null;
-    }
-
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      });
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: msg.media_url },
-        { shouldPlay: true }
-      );
-      soundRef.current = sound;
-      setPlayingVoiceId(msg.id);
-      setPlaybackSeconds(0);
-
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
-          if (status.positionMillis) {
-            setPlaybackSeconds(Math.floor(status.positionMillis / 1000));
-          }
-          if (status.didJustFinish) {
-            setPlayingVoiceId(null);
-            setPlaybackSeconds(0);
-            sound.unloadAsync().catch(() => {});
-            soundRef.current = null;
-          }
-        }
-      });
-    } catch (err: any) {
-      console.error('Audio Playback Error:', err);
-      Linking.openURL(msg.media_url).catch(() => {});
-      setPlayingVoiceId(null);
-      setPlaybackSeconds(0);
-    }
-  };
 
   // Create Poll
   const handleCreatePoll = async () => {
@@ -857,7 +679,6 @@ const ChatScreen: React.FC = () => {
   const renderMessageItem = ({ item }: { item: MessageWithSender }) => {
     const isMe = item.sender_id === user?.id;
     const isSenderAdmin = item.sender?.username === 'admin';
-    const isPlayingThisVoice = playingVoiceId === item.id;
 
     return (
       <View style={[styles.messageRow, isMe ? styles.messageRowMe : styles.messageRowOther]}>
@@ -950,15 +771,25 @@ const ChatScreen: React.FC = () => {
                 </View>
               )}
 
-              {/* Type 4: Video Playback */}
+              {/* Type 4: Video Playback Card (Zero-Crash System Video Player) */}
               {item.message_type === 'video' && item.media_url && (
-                <View style={[styles.videoCard, { backgroundColor: isDark ? '#050A0E' : '#E8EFF5' }]}>
-                  <SafeVideo
-                    source={{ uri: item.media_url }}
-                    useNativeControls
-                    resizeMode={SafeResizeMode.CONTAIN}
-                    style={{ width: '100%', height: 160, backgroundColor: '#000000' }}
-                  />
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[styles.videoCard, { backgroundColor: isDark ? '#050A0E' : '#E8EFF5' }]}
+                  onPress={() => {
+                    if (item.media_url) {
+                      Linking.openURL(item.media_url).catch(() => {
+                        Alert.alert('Cannot Open Video', 'Unable to open video player.');
+                      });
+                    }
+                  }}
+                >
+                  <View style={styles.videoThumbnailSim}>
+                    <View style={styles.videoPlayCircle}>
+                      <Text style={styles.videoPlayOverlay}>▶</Text>
+                    </View>
+                    <Text style={styles.videoTapToPlayText}>Tap to play in system player ↗</Text>
+                  </View>
                   <View style={styles.videoInfo}>
                     <Text style={[styles.videoTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                       {item.media_meta?.filename || 'video.mp4'}
@@ -967,21 +798,28 @@ const ChatScreen: React.FC = () => {
                       🎬 Video Recording {item.media_meta?.duration ? `• ${item.media_meta.duration}s` : ''}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               )}
 
-              {/* Type 5: Voice Note with Interactive Play / Pause */}
+              {/* Type 5: Voice Note Card (Zero-Crash System Audio Player) */}
               {item.message_type === 'voice' && (
-                <View style={[styles.voiceCard, { backgroundColor: isDark ? '#071017' : '#F1F5F8' }]}>
-                  <TouchableOpacity
-                    id={`play-voice-${item.id}`}
-                    style={[styles.voicePlayBtn, { backgroundColor: colors.primary }]}
-                    onPress={() => handleTogglePlayVoice(item)}
-                  >
-                    <Text style={styles.voicePlayIcon}>
-                      {isPlayingThisVoice ? '⏸' : '▶'}
-                    </Text>
-                  </TouchableOpacity>
+                <TouchableOpacity
+                  id={`play-voice-${item.id}`}
+                  activeOpacity={0.85}
+                  style={[styles.voiceCard, { backgroundColor: isDark ? '#071017' : '#F1F5F8' }]}
+                  onPress={() => {
+                    if (item.media_url) {
+                      Linking.openURL(item.media_url).catch(() => {
+                        Alert.alert('Cannot Open Audio', 'Unable to play this audio link.');
+                      });
+                    } else {
+                      Alert.alert('Audio Unavailable', 'No media URL provided for this voice note.');
+                    }
+                  }}
+                >
+                  <View style={[styles.voicePlayBtn, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.voicePlayIcon}>▶</Text>
+                  </View>
 
                   <View style={styles.voiceWaveContainer}>
                     <View style={styles.voiceBars}>
@@ -992,11 +830,7 @@ const ChatScreen: React.FC = () => {
                             styles.voiceWaveBar,
                             {
                               height: 6 + ((bIdx * 7) % 18),
-                              backgroundColor: isPlayingThisVoice
-                                ? (bIdx / 14 <= playbackSeconds / (item.media_meta?.duration || 10)
-                                    ? colors.primary
-                                    : (isDark ? '#334856' : '#BAC8D3'))
-                                : colors.primary,
+                              backgroundColor: colors.primary,
                             },
                           ]}
                         />
@@ -1005,18 +839,16 @@ const ChatScreen: React.FC = () => {
 
                     <View style={styles.voiceTimerRow}>
                       <Text style={[styles.voiceTimerText, { color: colors.textSecondary }]}>
-                        {isPlayingThisVoice
-                          ? `0:${playbackSeconds.toString().padStart(2, '0')}`
-                          : item.media_meta?.duration
+                        {item.media_meta?.duration
                           ? `0:${item.media_meta.duration.toString().padStart(2, '0')}`
                           : 'Voice Note'}
                       </Text>
                       <Text style={[styles.voiceBadge, { color: colors.primary }]}>
-                        🎤 {item.media_meta?.duration ? `${item.media_meta.duration}s` : 'Audio'}
+                        🎤 Play Audio ↗
                       </Text>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               )}
 
               {/* Type 6: Document Attachment */}
@@ -1245,114 +1077,75 @@ const ChatScreen: React.FC = () => {
           </View>
         )}
 
-        {/* ── Media Uploading Indicator ── */}
-        {isUploadingMedia && (
-          <View style={[styles.uploadingMediaBanner, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 8 }} />
-            <Text style={[styles.uploadingMediaText, { color: colors.primary }]}>
-              Uploading voice note to Supabase Storage...
-            </Text>
+        {/* ── Standard Input Toolbar & Composer ── */}
+        <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          {/* Quick Attachment Buttons */}
+          <View style={styles.toolsRow}>
+            {/* Paperclip / Attach Drawer */}
+            <TouchableOpacity
+              id="attach-media-btn"
+              style={[
+                styles.toolBtn,
+                {
+                  borderColor: spamLimiter.mediaLocked ? colors.border : colors.primary,
+                  opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
+                },
+              ]}
+              disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
+              onPress={() => setIsAttachModalOpen(true)}
+            >
+              <Text style={styles.toolIcon}>📎</Text>
+            </TouchableOpacity>
+
+            {/* GIF Button */}
+            <TouchableOpacity
+              id="gif-modal-btn"
+              style={[
+                styles.toolBtn,
+                {
+                  borderColor: spamLimiter.mediaLocked ? colors.border : colors.accent,
+                  opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
+                },
+              ]}
+              disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
+              onPress={() => setIsGifModalOpen(true)}
+            >
+              <Text style={[styles.toolGifText, { color: colors.accent }]}>GIF</Text>
+            </TouchableOpacity>
+
+            {/* Poll Button */}
+            <TouchableOpacity
+              id="create-poll-btn"
+              style={[
+                styles.toolBtn,
+                {
+                  borderColor: colors.primary,
+                  opacity: spamLimiter.isInputLocked ? 0.4 : 1,
+                },
+              ]}
+              disabled={spamLimiter.isInputLocked}
+              onPress={() => setIsPollModalOpen(true)}
+            >
+              <Text style={styles.toolIcon}>📊</Text>
+            </TouchableOpacity>
+
+            {/* Microphone / Voice Note Maintenance Button */}
+            <TouchableOpacity
+              id="record-voice-btn"
+              style={[
+                styles.toolBtn,
+                {
+                  borderColor: colors.border,
+                  opacity: 0.6,
+                },
+              ]}
+              onPress={() => {
+                Alert.alert('Voice Notes', 'Voice notes are currently in maintenance.');
+              }}
+            >
+              <Text style={styles.toolIcon}>🎤</Text>
+            </TouchableOpacity>
           </View>
-        )}
-
-        {/* ── Voice Recording Active Bar (replaces composer when recording) ── */}
-        {isRecordingVoice ? (
-          <View style={[styles.recordingBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            <View style={styles.recordingLeft}>
-              <View style={styles.recordingPulseDot} />
-              <Text style={styles.recordingText}>REC</Text>
-              <Text style={[styles.recordingTimer, { color: colors.danger }]}>
-                {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}
-              </Text>
-            </View>
-
-            <View style={styles.recordingActions}>
-              <TouchableOpacity
-                id="cancel-voice-btn"
-                style={[styles.recordingCancelBtn, { borderColor: colors.border }]}
-                onPress={handleCancelVoiceRecord}
-              >
-                <Text style={[styles.recordingCancelText, { color: colors.textSecondary }]}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                id="send-voice-btn"
-                style={[styles.recordingSendBtn, { backgroundColor: colors.primary }]}
-                onPress={handleSendVoiceNote}
-              >
-                <Text style={styles.recordingSendText}>Send Voice Note ➤</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          /* ── Standard Input Toolbar & Composer ── */
-          <View style={[styles.inputBar, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-            {/* Quick Attachment Buttons */}
-            <View style={styles.toolsRow}>
-              {/* Paperclip / Attach Drawer */}
-              <TouchableOpacity
-                id="attach-media-btn"
-                style={[
-                  styles.toolBtn,
-                  {
-                    borderColor: spamLimiter.mediaLocked ? colors.border : colors.primary,
-                    opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
-                  },
-                ]}
-                disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
-                onPress={() => setIsAttachModalOpen(true)}
-              >
-                <Text style={styles.toolIcon}>📎</Text>
-              </TouchableOpacity>
-
-              {/* GIF Button */}
-              <TouchableOpacity
-                id="gif-modal-btn"
-                style={[
-                  styles.toolBtn,
-                  {
-                    borderColor: spamLimiter.mediaLocked ? colors.border : colors.accent,
-                    opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
-                  },
-                ]}
-                disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
-                onPress={() => setIsGifModalOpen(true)}
-              >
-                <Text style={[styles.toolGifText, { color: colors.accent }]}>GIF</Text>
-              </TouchableOpacity>
-
-              {/* Poll Button */}
-              <TouchableOpacity
-                id="create-poll-btn"
-                style={[
-                  styles.toolBtn,
-                  {
-                    borderColor: colors.primary,
-                    opacity: spamLimiter.isInputLocked ? 0.4 : 1,
-                  },
-                ]}
-                disabled={spamLimiter.isInputLocked}
-                onPress={() => setIsPollModalOpen(true)}
-              >
-                <Text style={styles.toolIcon}>📊</Text>
-              </TouchableOpacity>
-
-              {/* Microphone / Voice Note Recording Button */}
-              <TouchableOpacity
-                id="record-voice-btn"
-                style={[
-                  styles.toolBtn,
-                  {
-                    borderColor: spamLimiter.mediaLocked ? colors.border : colors.primary,
-                    opacity: spamLimiter.mediaLocked || spamLimiter.isInputLocked ? 0.4 : 1,
-                  },
-                ]}
-                disabled={spamLimiter.mediaLocked || spamLimiter.isInputLocked}
-                onPress={handleStartVoiceRecord}
-              >
-                <Text style={styles.toolIcon}>🎤</Text>
-              </TouchableOpacity>
-            </View>
 
             {/* Text Input Row */}
             <View style={styles.composerRow}>
@@ -1407,7 +1200,6 @@ const ChatScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
-        )}
       </KeyboardAvoidingView>
 
       {/* ─────────────────────────────────────────────────────────
@@ -2376,9 +2168,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  videoPlayCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 255, 204, 0.2)',
+    borderWidth: 1,
+    borderColor: '#00FFCC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
   videoPlayOverlay: {
-    color: '#FFFFFF',
-    fontSize: 32,
+    color: '#00FFCC',
+    fontSize: 18,
+    marginLeft: 2,
+  },
+  videoTapToPlayText: {
+    color: '#7E8E9C',
+    fontSize: 10,
+    fontWeight: '600',
   },
   videoInfo: {
     padding: 8,

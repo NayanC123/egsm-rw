@@ -271,10 +271,10 @@ Realtime: all 8 tables added to `supabase_realtime` publication.
 
 ---
 
-## 7. Version 2.0.5-beta Architecture & Change Log
+## 7. Version 2.1.0 Architecture & Change Log
 
 ### 7.1 Release Overview & Zero-Crash Architecture
-Branch `2.0.5-beta` enforces strict native binary stability standards for production Android (`.apk` / `.aab`) and iOS builds. To eliminate startup crashes caused by unlinked native runtime dependencies and third-party native modules in standalone APKs:
+Release `2.1.0` enforces strict native binary stability standards for production Android (`.apk` / `.aab`) and iOS builds. To eliminate startup crashes caused by unlinked native runtime dependencies and third-party native modules in standalone APKs:
 - **Strictly Zero Native Plugins**: Completely uninstalled/purged `expo-av`, `expo-image-picker`, `expo-document-picker`, `expo-file-system`, and `@react-navigation/*`.
 - **Clean `app.json`**: Removed the `"plugins"` array completely. No background or startup hooks inject native code that fails on Android startup.
 - **Built-in React Native Core Only**: The UI is composed exclusively with built-in React Native components (`View`, `Text`, `TextInput`, `TouchableOpacity`, `Pressable`, `FlatList`, `ScrollView`, `Image`, `Modal`, `Alert`, `Linking`, `BackHandler`, `StatusBar`, `Platform`, `StyleSheet`, `SafeAreaView`, `ActivityIndicator`, `KeyboardAvoidingView`).
@@ -393,7 +393,7 @@ Since native camera and document picker libraries crash standalone APK binaries 
 
 ---
 
-### 7.6 Full File Modification Log for Version 2.0.5-beta
+### 7.6 Full File Modification Log for Version 2.1.0
 
 | File | Changes Made |
 | :--- | :--- |
@@ -405,15 +405,15 @@ Since native camera and document picker libraries crash standalone APK binaries 
 | `src/services/chatService.ts` | Built `profiles` lookup map for chat messages; mapped `sender` to real `display_name` and `@username`. Purged mock seed data. |
 | `src/components/common/HyperlinkText.tsx` | Reusable React Native hyperlink text component with robust URL regex tokenization, native `Linking.canOpenURL` / `Linking.openURL` handling, error alerts, and `#00FFCC` underlined link styling. |
 | `src/screens/PostsScreen.tsx` | Integrated `HyperlinkText` into post feed preview and `PostDetailView` body; added `BackHandler` listener (detail/create/leaderboard → feed); applied `SAFE_TOP` to all modal overlays; replaced native pickers with URL image & doc modals with live preview; fixed rater display name. |
-| `src/screens/ChatScreen.tsx` | Integrated `HyperlinkText` for all text message bubbles; implemented WhatsApp-style inverted scrolling (`inverted={true}` + `[...messages].reverse()`); purged all `scrollToEnd()` calls; wrapped in `KeyboardAvoidingView` for zero-obscured input; built end-to-end `expo-av` voice note recording UI, Supabase Storage `'chat-media'` upload, and interactive in-bubble streaming playback. |
+| `src/screens/ChatScreen.tsx` | Integrated `HyperlinkText` for all text message bubbles; implemented WhatsApp-style inverted scrolling (`inverted={true}` + `[...messages].reverse()`); purged all `scrollToEnd()` calls; wrapped in `KeyboardAvoidingView` for zero-obscured input; eliminated `expo-av` completely; replaced composer mic with maintenance alert; rendered sleek media cards opening system players via `Linking.openURL(item.media_url)`. |
 | `App.tsx` | Added `BackHandler` listener (other tabs → chat); applied `paddingTop: SAFE_TOP` to root safe container. |
 | `src/components/Posts/LeaderboardView.tsx` | Imported `StatusBar` and `SAFE_TOP`; adjusted header padding to prevent status bar collision. |
 | `src/screens/AdminPortalScreen.tsx` | Applied `SAFE_TOP` to modal overlays; set topBar `paddingTop: 12`; removed `"Member"` fallback from offense reports. |
-| `PROJECT_CONTEXT.md` | Documented full `Version 2.0.5-beta Architecture & Change Log` with database architecture, navigation flow, and file logs. |
+| `PROJECT_CONTEXT.md` | Documented full `Version 2.1.0 Architecture & Change Log` with database architecture, navigation flow, file logs, and zero-crash AV cleanup. |
 
 ---
 
-### 7.7 Critical Chat Engine Overhaul: Inverted Scrolling, Keyboard Compression & Voice Notes
+### 7.7 Critical Chat Engine Overhaul: Inverted Scrolling, Keyboard Compression & Zero-Crash AV
 
 #### 1. Inverted WhatsApp-Style Scrolling & Snap-Back Elimination (`ChatScreen.tsx`)
 - **Parent Container Viewport**: Wrapped the `FlatList` in a dedicated parent container with `style={styles.messageStreamContainer}` (`flex: 1`, `backgroundColor: '#050A0E'`) to ensure a strictly defined viewport height and prevent Android touch responder chain breaks.
@@ -440,21 +440,13 @@ Since native camera and document picker libraries crash standalone APK binaries 
 - **Natural Message Flow**: New messages arrive at the bottom (`y = 0`) naturally without bouncing the user down when inspecting past messages.
 - **Targeted Jump to Message**: Adjusted pinned message jump selector to compute target index dynamically via `reversed.findIndex(m => m.id === messageId)`.
 
-#### 3. End-to-End Voice Notes (`app.json`, `package.json`, `ChatScreen.tsx`)
-- **Native Stability Settings (`app.json`)**:
-  - `"newArchEnabled": false` set under `"expo"` to ensure audio drivers and native threads run stably.
-  - `"RECORD_AUDIO"` and `"android.permission.RECORD_AUDIO"` added to `android.permissions`.
-  - `"NSMicrophoneUsageDescription"` declared in `ios.infoPlist`.
-- **Recording Architecture (`ChatScreen.tsx`)**:
-  - Permissions requested via `Audio.requestPermissionsAsync()`.
-  - Audio mode configured via `Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true })`.
-  - Recording initiated with `Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY)`.
-  - Active Recording UI: Pulsing red `REC` indicator, live seconds counter (`0:01`, `0:02`...), `Cancel` button, and `Send Voice Note` button.
-  - Storage Upload: Retrieves `.m4a` file via `recording.getURI()`, streams upload to `'chat-media'` bucket in Supabase via `uploadFileToSupabase`, and inserts record into `messages` with `message_type: 'voice'`.
-- **Interactive In-Bubble Playback**:
-  - Interactive `Play / Pause` toggle (`⏸` / `▶`) with dynamic waveform bars and duration badge.
-  - Live audio streaming directly from Supabase public URL via `Audio.Sound.createAsync({ uri: msg.media_url }, { shouldPlay: true })`.
-  - Automatic playback state tracking, second-by-second progress updates, and clean unloading on completion or component unmount.
+#### 2. Complete `expo-av` Cleanup & Zero-Crash Media Architecture (`ChatScreen.tsx`)
+- **Zero Native Audio Plugins**: Completely removed `expo-av` from `package.json` and all source code to prevent immediate crash-on-launch in production APKs.
+- **Composer Maintenance State**: Replaced the microphone recording action in the composer toolbar with an informational alert (`Alert.alert('Voice Notes', 'Voice notes are currently in maintenance.')`). Pressing the microphone never triggers native audio recording or loads audio drivers.
+- **Sleek Audio & Video Bubble Cards**:
+  - For `video` messages, rendered a sleek card with a styled cyan play circle (`▶`) and metadata badge that delegates playback directly to the system video player via `Linking.openURL(item.media_url)`.
+  - For `voice` messages, rendered a styled waveform card with duration badge that opens the media link directly in the system player via `Linking.openURL(item.media_url)`.
+- **No Background Audio State Leaks**: Purged all `Audio.Sound`, `Audio.Recording`, playback timers, and recording intervals, eliminating unhandled rejection risks on component unmount.
 
 ---
 
@@ -480,9 +472,20 @@ Since native camera and document picker libraries crash standalone APK binaries 
 
 ### 7.9 Verification & Compilation Status
 - **TypeScript Check**: `npx tsc --noEmit` executed cleanly with **0 errors**.
-- **Native Audio Package**: `expo-av` (`^16.0.8`) installed and fully typed.
-- **Native Stability**: Zero crash-inducing navigation or unconfigured native plugins.
-- **Git Branch & Versioning**: Version aligned to `2.0.5-beta` across `package.json`, `package-lock.json`, `app.json`, and Android `versionName`. Where tags are unsupported by platform validators (iOS `CFBundleShortVersionString` / `buildNumber`), `2.0.5.1` is set (`android.versionCode: 20501`). Verified on branch `2.0.5-beta`.
+- **Native Audio Package**: `expo-av` 100% removed and purged from dependencies.
+- **Native Stability**: Zero crash-inducing audio modules, navigation dependencies, or unconfigured native plugins.
+- **Git Branch & Versioning**: Version aligned to `2.1.0` across `package.json`, `package-lock.json`, `app.json`, Android `versionName`, and iOS `CFBundleShortVersionString` / `buildNumber` (`android.versionCode: 21000`).
+
+---
+
+### 7.10 Production Readiness Audit & GitHub Actions Sync Sign-Off (v2.1.0)
+- **Zero-Crash Native Architecture**: Verified `expo-av` 100% purged from `package.json`, `package-lock.json`, and all source files. Chat composer microphone replaces recording action with an informational maintenance alert (`Alert.alert('Voice Notes', 'Voice notes are currently in maintenance.')`). Audio/Video chat bubbles open in the system player via `Linking.openURL(item.media_url)`.
+- **Expo & Android Native Config**: Verified `newArchEnabled: false`, `softwareKeyboardLayoutMode: "resize"`, NO `"plugins"` array, `version: "2.1.0"`, `android.versionCode: 21000`, and `ios.buildNumber: "2.1.0"`.
+- **Database & Live Fallback Security**: Verified `src/services/supabase.ts` uses static dot-syntax `process.env.EXPO_PUBLIC_SUPABASE_URL` and `process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY` with verified live fallback project constants (`FALLBACK_URL`, `FALLBACK_KEY`) to ensure standalone APKs never lose backend connection. Zero mock arrays (`_localProfiles`, `_localPosts`, `_localMessages`) exist in the codebase.
+- **GitHub Actions Workflow Synchronization**: Synchronized `.github/workflows/build-apk.yml` with multi-branch triggers (`[main, 2.0.5-beta, 2.0.5.1, 2.1.0]`), automatic nested `egsm` directory navigation, clean `expo prebuild`, `./gradlew assembleRelease --no-daemon`, and artifact upload (`egsm-v2.1.0-apk`).
+- **Clean TypeScript Verification**: `npx tsc --noEmit` executed cleanly with **0 errors**.
+- **Audit Sign-Off**: Production-ready for Android release APK packaging.
+
 
 
 

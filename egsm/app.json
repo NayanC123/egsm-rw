@@ -2,7 +2,7 @@
   "expo": {
     "name": "egsm",
     "slug": "egsm",
-    "version": "2.0.5-beta",
+    "version": "2.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -13,7 +13,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.nayan.egsm",
-      "buildNumber": "2.0.5.1",
+      "buildNumber": "2.1.0",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "This app requires access to your camera to take photos and share them in community posts and group discussions.",
@@ -24,7 +24,7 @@
     "newArchEnabled": false,
     "android": {
       "package": "com.nayan.egsm",
-      "versionCode": 20501,
+      "versionCode": 21000,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#050A0E",
