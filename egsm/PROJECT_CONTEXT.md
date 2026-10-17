@@ -484,7 +484,7 @@ Since native camera and document picker libraries crash standalone APK binaries 
 - **Database & Live Fallback Security**: Verified `src/services/supabase.ts` uses static dot-syntax `process.env.EXPO_PUBLIC_SUPABASE_URL` and `process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY` with verified live fallback project constants (`FALLBACK_URL`, `FALLBACK_KEY`) to ensure standalone APKs never lose backend connection. Zero mock arrays (`_localProfiles`, `_localPosts`, `_localMessages`) exist in the codebase.
 - **GitHub Actions Workflow Synchronization**: Synchronized `.github/workflows/build-apk.yml` with multi-branch triggers (`[main, 2.0.5-beta, 2.0.5.1, 2.1.0]`), automatic nested `egsm` directory navigation, clean `expo prebuild`, `./gradlew assembleRelease --no-daemon`, and artifact upload (`egsm-v2.1.0-apk`).
 - **Clean TypeScript Verification**: `npx tsc --noEmit` executed cleanly with **0 errors**.
-- **Audit Sign-Off**: Production-ready for Android release APK packaging.
+- **Audit Sign-Off & Commit**: Verified and signed off at commit [`31b20b6`](file:///home/nayan/egsm-rw/.git). Production-ready for Android release APK packaging.
 
 
 
