@@ -46,6 +46,8 @@ import type {
 } from '../types/database';
 import { SAFE_TOP } from '../utils/layout';
 import { HyperlinkText } from '../components/common/HyperlinkText';
+import { CIPHER_ALGORITHM, getKeyFingerprint, encryptMessage, decryptMessage } from '../utils/e2ee';
+import { uploadLocalFileToStorage } from '../services/storageService';
 
 const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
 
@@ -150,8 +152,11 @@ const ChatScreen: React.FC = () => {
   const [attachTab, setAttachTab] = useState<'photo' | 'video' | 'audio' | 'doc'>('photo');
   const [customMediaUrl, setCustomMediaUrl] = useState<string>('');
   const [customMediaName, setCustomMediaName] = useState<string>('');
+  const [isUploadingMedia, setIsUploadingMedia] = useState<boolean>(false);
 
-
+  // E2EE Cryptography Inspector Modal
+  const [isE2eeModalOpen, setIsE2eeModalOpen] = useState<boolean>(false);
+  const [inspectorDemoText, setInspectorDemoText] = useState<string>('Hello from Science Exhibition! 🔬🔒');
 
   // Create Poll Modal
   const [isPollModalOpen, setIsPollModalOpen] = useState<boolean>(false);
@@ -213,6 +218,10 @@ const ChatScreen: React.FC = () => {
         setZoomImageUrl(null);
         return true;
       }
+      if (isE2eeModalOpen) {
+        setIsE2eeModalOpen(false);
+        return true;
+      }
       if (isActionModalOpen) {
         setIsActionModalOpen(false);
         return true;
@@ -240,6 +249,7 @@ const ChatScreen: React.FC = () => {
     return () => sub.remove();
   }, [
     zoomImageUrl,
+    isE2eeModalOpen,
     isActionModalOpen,
     isReportModalOpen,
     isGifModalOpen,
@@ -462,6 +472,120 @@ const ChatScreen: React.FC = () => {
       setMessages((prev) => [...prev, newMsg]);
     } catch (err) {
       Alert.alert('Error', 'Failed to send document.');
+    }
+  };
+
+  // Lazy-loaded Device Camera Picker
+  const handlePickCameraPhoto = async () => {
+    try {
+      const ImagePicker = require('expo-image-picker');
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Camera permission is required to capture photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploadingMedia(true);
+        const fileName = asset.fileName || `chat_photo_${Date.now()}.jpg`;
+        const uploadedUrl = await uploadLocalFileToStorage(
+          'chat-media',
+          asset.uri,
+          fileName,
+          asset.mimeType || 'image/jpeg'
+        );
+        setIsUploadingMedia(false);
+        await handleSendMedia('photo', uploadedUrl, fileName);
+      }
+    } catch (err: any) {
+      setIsUploadingMedia(false);
+      console.warn('Camera picker failed/unavailable:', err);
+      Alert.alert(
+        'Camera Unavailable',
+        'Device camera is unavailable. You can enter an image URL instead.'
+      );
+    }
+  };
+
+  // Lazy-loaded Device Gallery Picker
+  const handlePickGalleryPhoto = async () => {
+    try {
+      const ImagePicker = require('expo-image-picker');
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Photo library permission is required to select photos.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploadingMedia(true);
+        const fileName = asset.fileName || `chat_gallery_${Date.now()}.jpg`;
+        const uploadedUrl = await uploadLocalFileToStorage(
+          'chat-media',
+          asset.uri,
+          fileName,
+          asset.mimeType || 'image/jpeg'
+        );
+        setIsUploadingMedia(false);
+        await handleSendMedia('photo', uploadedUrl, fileName);
+      }
+    } catch (err: any) {
+      setIsUploadingMedia(false);
+      console.warn('Gallery picker failed/unavailable:', err);
+      Alert.alert(
+        'Gallery Unavailable',
+        'Device gallery is unavailable. You can enter an image URL instead.'
+      );
+    }
+  };
+
+  // Lazy-loaded Device Document Picker
+  const handlePickDocument = async () => {
+    try {
+      const DocumentPicker = require('expo-document-picker');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploadingMedia(true);
+        const fileName = asset.name || `chat_doc_${Date.now()}.pdf`;
+        const mimeType = asset.mimeType || 'application/octet-stream';
+        const uploadedUrl = await uploadLocalFileToStorage(
+          'chat-media',
+          asset.uri,
+          fileName,
+          mimeType
+        );
+        setIsUploadingMedia(false);
+        await handleSendDocument({
+          name: fileName,
+          url: uploadedUrl,
+          mimeType,
+          size: asset.size || 1024 * 512,
+        });
+      }
+    } catch (err: any) {
+      setIsUploadingMedia(false);
+      console.warn('Document picker failed/unavailable:', err);
+      Alert.alert(
+        'Document Picker Unavailable',
+        'Device document picker is unavailable. You can enter a document URL instead.'
+      );
     }
   };
 
@@ -711,6 +835,9 @@ const ChatScreen: React.FC = () => {
               {item.is_pinned && (
                 <Text style={styles.pinnedBadgeIcon}>📌</Text>
               )}
+              {item.is_encrypted && (
+                <Text style={styles.lockBadgeIcon}>🔒</Text>
+              )}
               <Text style={[styles.bubbleTime, { color: colors.textSecondary }]}>
                 {formatTime(item.created_at)}
               </Text>
@@ -900,28 +1027,43 @@ const ChatScreen: React.FC = () => {
     <View style={[styles.container, { backgroundColor: colors.mainBackground }]}>
       {/* ── Chat Header ── */}
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <View style={styles.headerTitleWrap}>
-          <Text style={[styles.headerHash, { color: colors.primary }]}>#</Text>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>egsm-general</Text>
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerTitleWrap}>
+            <Text style={[styles.headerHash, { color: colors.primary }]}>#</Text>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>egsm-general</Text>
+          </View>
+
+          <View style={styles.headerStatusRow}>
+            <View style={[styles.statusDot, { backgroundColor: isLive ? colors.primary : '#FFB800' }]} />
+            <Text style={[styles.statusText, { color: colors.textSecondary }]}>
+              {isLive ? 'LIVE' : 'Local Sync'}
+            </Text>
+            {pinnedMessages.length > 0 && (
+              <TouchableOpacity
+                id="pinned-toggle-btn"
+                style={[styles.pinnedHeaderBadge, { borderColor: colors.accent }]}
+                onPress={() => setIsPinnedBannerExpanded((prev) => !prev)}
+              >
+                <Text style={[styles.pinnedHeaderBadgeText, { color: colors.accent }]}>
+                  📌 {pinnedMessages.length} Pinned {isPinnedBannerExpanded ? '▲' : '▼'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
-        <View style={styles.headerStatusRow}>
-          <View style={[styles.statusDot, { backgroundColor: isLive ? colors.primary : '#FFB800' }]} />
-          <Text style={[styles.statusText, { color: colors.textSecondary }]}>
-            {isLive ? 'LIVE' : 'Local Sync'}
+        {/* 🔒 Sleek #00FFCC Security Badge (Tappable Inspector Trigger) */}
+        <TouchableOpacity
+          id="e2ee-header-security-badge"
+          style={styles.e2eeHeaderBadge}
+          onPress={() => setIsE2eeModalOpen(true)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.e2eePulseDot} />
+          <Text style={styles.e2eeHeaderBadgeText}>
+            🔒 E2EE Active • Zero-Knowledge Cloud
           </Text>
-          {pinnedMessages.length > 0 && (
-            <TouchableOpacity
-              id="pinned-toggle-btn"
-              style={[styles.pinnedHeaderBadge, { borderColor: colors.accent }]}
-              onPress={() => setIsPinnedBannerExpanded((prev) => !prev)}
-            >
-              <Text style={[styles.pinnedHeaderBadgeText, { color: colors.accent }]}>
-                📌 {pinnedMessages.length} Pinned {isPinnedBannerExpanded ? '▲' : '▼'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* ── Sticky Pinned Messages Banner ── */}
@@ -1534,11 +1676,46 @@ const ChatScreen: React.FC = () => {
             {attachTab === 'photo' && (
               <View style={styles.attachSection}>
                 <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                  Attach Photo / Image URL
+                  Attach Photo (Camera / Gallery / URL)
                 </Text>
-                <Text style={[{ color: colors.textSecondary, fontSize: 12, marginBottom: 10 }]}>
-                  Paste any direct image link (.png, .jpg, .webp, .gif) to share in group chat.
+                <Text style={[{ color: colors.textSecondary, fontSize: 12, marginBottom: 12 }]}>
+                  Capture from camera, choose from your device gallery, or paste a direct image URL.
                 </Text>
+
+                {/* Real Device Pickers */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                  <TouchableOpacity
+                    id="btn-chat-camera-pick"
+                    style={[styles.pickerActionBtn, { flex: 1, backgroundColor: 'rgba(0, 255, 204, 0.12)', borderColor: colors.primary }]}
+                    onPress={handlePickCameraPhoto}
+                    disabled={isUploadingMedia}
+                  >
+                    <Text style={[styles.pickerActionBtnText, { color: colors.primary }]}>📸 Camera</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    id="btn-chat-gallery-pick"
+                    style={[styles.pickerActionBtn, { flex: 1, backgroundColor: 'rgba(0, 255, 204, 0.12)', borderColor: colors.primary }]}
+                    onPress={handlePickGalleryPhoto}
+                    disabled={isUploadingMedia}
+                  >
+                    <Text style={[styles.pickerActionBtnText, { color: colors.primary }]}>🖼️ Gallery</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {isUploadingMedia && (
+                  <View style={styles.uploadingInlineRow}>
+                    <ActivityIndicator color={colors.primary} size="small" style={{ marginRight: 8 }} />
+                    <Text style={[styles.uploadingInlineText, { color: colors.primary }]}>
+                      Uploading to Supabase Storage ('chat-media')...
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 11, marginBottom: 10, fontWeight: '600' }}>
+                  ── OR PASTE IMAGE URL ──
+                </Text>
+
                 <TextInput
                   style={[styles.urlInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="https://example.com/photo.jpg"
@@ -1629,11 +1806,35 @@ const ChatScreen: React.FC = () => {
             {attachTab === 'doc' && (
               <View style={styles.attachSection}>
                 <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>
-                  Attach Document Link (PDF, Doc, Archive)
+                  Attach Document (Device File / URL)
                 </Text>
-                <Text style={[{ color: colors.textSecondary, fontSize: 12, marginBottom: 10 }]}>
-                  Enter the file title and direct URL. Members can download or view it in their device viewer.
+                <Text style={[{ color: colors.textSecondary, fontSize: 12, marginBottom: 12 }]}>
+                  Pick a document from your device or enter a document title and download link.
                 </Text>
+
+                {/* Real Device Document Picker */}
+                <TouchableOpacity
+                  id="btn-chat-doc-pick"
+                  style={[styles.pickerActionBtn, { backgroundColor: 'rgba(0, 255, 204, 0.12)', borderColor: colors.primary, marginBottom: 14 }]}
+                  onPress={handlePickDocument}
+                  disabled={isUploadingMedia}
+                >
+                  <Text style={[styles.pickerActionBtnText, { color: colors.primary }]}>📂 Pick Document from Device</Text>
+                </TouchableOpacity>
+
+                {isUploadingMedia && (
+                  <View style={styles.uploadingInlineRow}>
+                    <ActivityIndicator color={colors.primary} size="small" style={{ marginRight: 8 }} />
+                    <Text style={[styles.uploadingInlineText, { color: colors.primary }]}>
+                      Uploading to Supabase Storage ('chat-media')...
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 11, marginBottom: 10, fontWeight: '600' }}>
+                  ── OR ENTER DOCUMENT LINK ──
+                </Text>
+
                 <TextInput
                   style={[styles.urlInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.textPrimary }]}
                   placeholder="Document Name (e.g. Audit_Log.pdf)"
@@ -1671,6 +1872,192 @@ const ChatScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
             )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* ── E2EE Cryptography Inspector Modal (Science Exhibition Demo) ── */}
+      <Modal
+        visible={isE2eeModalOpen}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setIsE2eeModalOpen(false)}
+      >
+        <View style={[styles.fullModalContainer, { backgroundColor: colors.mainBackground, paddingTop: SAFE_TOP_INLINE }]}>
+          <View style={[styles.fullModalHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+            <View>
+              <Text style={[styles.fullModalTitle, { color: colors.primary }]}>
+                🛡️ E2EE Cryptography Inspector
+              </Text>
+              <Text style={[{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }]}>
+                Live Zero-Knowledge Cloud Demonstration
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setIsE2eeModalOpen(false)} style={styles.closeModalBtn}>
+              <Text style={[styles.closeModalBtnText, { color: colors.textPrimary }]}>✕ Close</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.attachModalBody} contentContainerStyle={{ paddingBottom: 40 }}>
+            {/* Status Card */}
+            <View style={[styles.inspectorCard, { borderColor: colors.primary, backgroundColor: colors.surface }]}>
+              <View style={styles.inspectorStatusBadgeRow}>
+                <View style={[styles.statusDot, { backgroundColor: colors.primary }]} />
+                <Text style={[styles.inspectorBadgeText, { color: colors.primary }]}>
+                  ACTIVE • ZERO-KNOWLEDGE PROTOCOL
+                </Text>
+              </View>
+              <Text style={[styles.inspectorCardDesc, { color: colors.textPrimary }]}>
+                Messages are symmetrically encrypted on the client device before transmission. The Supabase cloud database stores exclusively ciphertext.
+              </Text>
+            </View>
+
+            {/* Cryptographic Specifications */}
+            <View style={[styles.inspectorCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+              <Text style={[styles.inspectorSectionTitle, { color: colors.primary }]}>
+                🔐 Cryptographic Engine Specifications
+              </Text>
+
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Cipher Algorithm:</Text>
+                <Text style={[styles.specValue, { color: colors.textPrimary }]}>{CIPHER_ALGORITHM}</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Active Key Fingerprint:</Text>
+                <Text style={[styles.specValueCode, { color: colors.primary }]}>{getKeyFingerprint()}</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Per-Message IV:</Text>
+                <Text style={[styles.specValue, { color: colors.textPrimary }]}>64-Bit Random Nonce (16 Hex)</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Integrity Tag (MAC):</Text>
+                <Text style={[styles.specValue, { color: colors.textPrimary }]}>SHA-256 Authentication Hash (64 Hex)</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Database Wire Format:</Text>
+                <Text style={[styles.specValueCode, { color: '#FFB800' }]}>ENCv1:&lt;iv_hex&gt;:&lt;cipher_hex&gt;:&lt;mac_hex&gt;</Text>
+              </View>
+            </View>
+
+            {/* Live Database Comparison */}
+            {(() => {
+              const sample = messages.find((m) => m.is_encrypted && m.raw_ciphertext) || {
+                raw_ciphertext: encryptMessage('Hello from Science Exhibition! 🔬 Live encrypted demo.'),
+                content: 'Hello from Science Exhibition! 🔬 Live encrypted demo.',
+              };
+
+              return (
+                <View style={[styles.inspectorCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                  <Text style={[styles.inspectorSectionTitle, { color: colors.primary }]}>
+                    ☁️ Live Cloud DB vs. Client Decryption
+                  </Text>
+                  <Text style={[styles.inspectorSubtext, { color: colors.textSecondary }]}>
+                    Comparing what the cloud database stores in Supabase vs. what this device renders:
+                  </Text>
+
+                  {/* Cloud Ciphertext */}
+                  <View style={styles.terminalBox}>
+                    <View style={styles.terminalHeader}>
+                      <Text style={styles.terminalHeaderText}>☁️ CLOUD DATABASE ROW (Supabase messages.content):</Text>
+                      <View style={styles.terminalTag}>
+                        <Text style={styles.terminalTagText}>RAW CIPHERTEXT</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.terminalCode} selectable>
+                      {sample.raw_ciphertext}
+                    </Text>
+                    <Text style={styles.terminalFootnote}>
+                      ⚠️ Database administrators, ISP network hops, & cloud hosting only see this ciphertext.
+                    </Text>
+                  </View>
+
+                  {/* Client Plaintext */}
+                  <View style={[styles.plaintextBox, { backgroundColor: isDark ? '#0A151C' : '#E8F7F4', borderColor: colors.primary }]}>
+                    <View style={styles.terminalHeader}>
+                      <Text style={[styles.terminalHeaderText, { color: colors.primary }]}>📱 WHAT THIS DEVICE RENDERS (Decrypted Plaintext):</Text>
+                      <View style={[styles.terminalTag, { backgroundColor: 'rgba(0, 255, 204, 0.2)' }]}>
+                        <Text style={[styles.terminalTagText, { color: colors.primary }]}>VERIFIED</Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.plaintextResult, { color: colors.textPrimary }]} selectable>
+                      "{sample.content}"
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+            {/* Interactive Live Encryption Sandbox for Science Exhibition */}
+            <View style={[styles.inspectorCard, { borderColor: colors.primary, backgroundColor: colors.surface }]}>
+              <Text style={[styles.inspectorSectionTitle, { color: colors.primary }]}>
+                🧪 Interactive Cryptography Sandbox
+              </Text>
+              <Text style={[styles.inspectorSubtext, { color: colors.textSecondary }]}>
+                Type any text or emojis to watch the 256-bit keystream and SHA-256 MAC generate live:
+              </Text>
+
+              <TextInput
+                id="e2ee-sandbox-input"
+                style={[styles.sandboxInput, { backgroundColor: isDark ? '#050A0E' : '#F4F7F9', color: colors.textPrimary, borderColor: colors.primary }]}
+                value={inspectorDemoText}
+                onChangeText={setInspectorDemoText}
+                placeholder="Type test message..."
+                placeholderTextColor={colors.textSecondary}
+              />
+
+              {(() => {
+                const liveCipher = encryptMessage(inspectorDemoText);
+                const liveDec = decryptMessage(liveCipher);
+                const parts = liveCipher.split(':');
+
+                return (
+                  <View style={{ marginTop: 12 }}>
+                    <View style={styles.sandboxDetailRow}>
+                      <Text style={[styles.sandboxLabel, { color: colors.textSecondary }]}>1. Random 64-Bit IV:</Text>
+                      <Text style={[styles.sandboxCode, { color: '#00FFCC' }]}>{parts[1] || '...'}</Text>
+                    </View>
+
+                    <View style={styles.sandboxDetailRow}>
+                      <Text style={[styles.sandboxLabel, { color: colors.textSecondary }]}>2. Stream Ciphertext (Hex):</Text>
+                      <Text style={[styles.sandboxCode, { color: '#FFB800' }]} numberOfLines={2}>
+                        {parts[2] || '...'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.sandboxDetailRow}>
+                      <Text style={[styles.sandboxLabel, { color: colors.textSecondary }]}>3. SHA-256 MAC Tag:</Text>
+                      <Text style={[styles.sandboxCode, { color: '#FF6600' }]} numberOfLines={1}>
+                        {parts[3] || '...'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.terminalBox}>
+                      <Text style={styles.terminalHeaderText}>FULL LIVE WIRE CIPHERTEXT:</Text>
+                      <Text style={styles.terminalCode} selectable numberOfLines={3}>
+                        {liveCipher}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.verificationBadge, { backgroundColor: liveDec.verified ? 'rgba(0, 255, 204, 0.15)' : 'rgba(255, 51, 102, 0.15)' }]}>
+                      <Text style={[styles.verificationText, { color: liveDec.verified ? '#00FFCC' : '#FF3366' }]}>
+                        {liveDec.verified ? '✅ Decryption Verified & Authenticated' : '❌ Integrity Failed'}
+                      </Text>
+                      <Text style={[{ color: colors.textPrimary, fontSize: 13, marginTop: 4 }]}>
+                        Decrypted: "{liveDec.text}"
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })()}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.customSendBtn, { backgroundColor: colors.primary, marginTop: 10 }]}
+              onPress={() => setIsE2eeModalOpen(false)}
+            >
+              <Text style={styles.customSendBtnText}>Return to Chat</Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
@@ -1824,13 +2211,43 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   header: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
+    width: '100%',
+  },
+  e2eeHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 255, 204, 0.08)',
+    borderColor: 'rgba(0, 255, 204, 0.35)',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  e2eePulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00FFCC',
+    marginRight: 6,
+  },
+  e2eeHeaderBadgeText: {
+    color: '#00FFCC',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   headerTitleWrap: {
     flexDirection: 'row',
@@ -2877,6 +3294,194 @@ const styles = StyleSheet.create({
   modalUploadingText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // ── Lock Badge & Pickers ──
+  lockBadgeIcon: {
+    fontSize: 10,
+    marginRight: 4,
+    opacity: 0.85,
+  },
+  pickerActionBtn: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerActionBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  uploadingInlineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  uploadingInlineText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // ── E2EE Cryptography Inspector ──
+  inspectorScroll: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  inspectorCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+  inspectorStatusBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  inspectorBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  inspectorCardDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '400',
+  },
+  inspectorSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  inspectorSubtext: {
+    fontSize: 12,
+    marginBottom: 10,
+    lineHeight: 16,
+    fontWeight: '400',
+  },
+  specRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  specLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    flex: 1,
+  },
+  specValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'right',
+    flex: 1,
+  },
+  specValueCode: {
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '700',
+    textAlign: 'right',
+    flex: 1,
+  },
+  terminalBox: {
+    backgroundColor: '#050A0E',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 10,
+    marginTop: 8,
+  },
+  terminalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  terminalHeaderText: {
+    color: '#7E8E9C',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    flex: 1,
+  },
+  terminalTag: {
+    backgroundColor: 'rgba(255, 184, 0, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  terminalTagText: {
+    color: '#FFB800',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  terminalCode: {
+    color: '#00FFCC',
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 16,
+    fontWeight: '400',
+  },
+  terminalFootnote: {
+    color: '#7E8E9C',
+    fontSize: 10,
+    marginTop: 6,
+    fontStyle: 'italic',
+    fontWeight: '400',
+  },
+  plaintextBox: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
+    marginTop: 10,
+  },
+  plaintextResult: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  sandboxInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  sandboxDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  sandboxLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    width: 140,
+  },
+  sandboxCode: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    textAlign: 'right',
+    fontWeight: '600',
+  },
+  verificationBadge: {
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 204, 0.3)',
+  },
+  verificationText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
 

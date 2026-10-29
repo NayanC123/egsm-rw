@@ -37,6 +37,7 @@ import {
 import type { DocumentAttachment } from '../types/database';
 import LeaderboardView from '../components/Posts/LeaderboardView';
 import { HyperlinkText } from '../components/common/HyperlinkText';
+import { uploadLocalFileToStorage } from '../services/storageService';
 
 const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
 
@@ -330,6 +331,120 @@ const PostsScreen: React.FC = () => {
   // Remove attached document
   const removeDocumentAttachment = (index: number) => {
     setAttachedDocs((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Lazy-loaded Device Camera Picker
+  const handlePickCameraPhoto = async () => {
+    try {
+      const ImagePicker = require('expo-image-picker');
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Camera permission is required to capture photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploading(true);
+        const fileName = asset.fileName || `post_photo_${Date.now()}.jpg`;
+        const uploadedUrl = await uploadLocalFileToStorage(
+          'post-attachments',
+          asset.uri,
+          fileName,
+          asset.mimeType || 'image/jpeg'
+        );
+        setIsUploading(false);
+        addImageAttachment(uploadedUrl);
+      }
+    } catch (err: any) {
+      setIsUploading(false);
+      console.warn('Camera picker failed/unavailable:', err);
+      Alert.alert(
+        'Camera Unavailable',
+        'Device camera is unavailable. You can enter an image URL instead.'
+      );
+    }
+  };
+
+  // Lazy-loaded Device Gallery Picker
+  const handlePickGalleryPhoto = async () => {
+    try {
+      const ImagePicker = require('expo-image-picker');
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Required', 'Photo library permission is required to select photos.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploading(true);
+        const fileName = asset.fileName || `post_gallery_${Date.now()}.jpg`;
+        const uploadedUrl = await uploadLocalFileToStorage(
+          'post-attachments',
+          asset.uri,
+          fileName,
+          asset.mimeType || 'image/jpeg'
+        );
+        setIsUploading(false);
+        addImageAttachment(uploadedUrl);
+      }
+    } catch (err: any) {
+      setIsUploading(false);
+      console.warn('Gallery picker failed/unavailable:', err);
+      Alert.alert(
+        'Gallery Unavailable',
+        'Device gallery is unavailable. You can enter an image URL instead.'
+      );
+    }
+  };
+
+  // Lazy-loaded Device Document Picker
+  const handlePickDocument = async () => {
+    try {
+      const DocumentPicker = require('expo-document-picker');
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploading(true);
+        const fileName = asset.name || `doc_${Date.now()}.pdf`;
+        const mimeType = asset.mimeType || 'application/octet-stream';
+        const uploadedUrl = await uploadLocalFileToStorage(
+          'post-attachments',
+          asset.uri,
+          fileName,
+          mimeType
+        );
+        setIsUploading(false);
+        addDocumentAttachment({
+          name: fileName,
+          url: uploadedUrl,
+          mimeType,
+          size: asset.size || 1024 * 512,
+        });
+      }
+    } catch (err: any) {
+      setIsUploading(false);
+      console.warn('Document picker failed/unavailable:', err);
+      Alert.alert(
+        'Document Picker Unavailable',
+        'Device document picker is unavailable. You can enter a document URL instead.'
+      );
+    }
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -690,9 +805,32 @@ const PostsScreen: React.FC = () => {
         >
           <View style={s.modalOverlay}>
             <View style={s.pickerModalBox}>
-              <Text style={s.pickerModalTitle}>📷 Attach Image URL</Text>
+              <Text style={s.pickerModalTitle}>📷 Attach Image</Text>
               <Text style={s.pickerModalSubtitle}>
-                Enter a direct image link (PNG, JPG, WebP, GIF) to attach to your post:
+                Capture from camera, select from device gallery, or paste an image URL:
+              </Text>
+
+              {/* Native Device Pickers */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                <TouchableOpacity
+                  id="btn-post-camera-pick"
+                  style={[s.modalActionButton, { flex: 1, backgroundColor: 'rgba(0, 255, 204, 0.12)', borderWidth: 1, borderColor: colors.primary }]}
+                  onPress={handlePickCameraPhoto}
+                >
+                  <Text style={[s.modalActionText, { color: colors.primary }]}>📸 Camera</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  id="btn-post-gallery-pick"
+                  style={[s.modalActionButton, { flex: 1, backgroundColor: 'rgba(0, 255, 204, 0.12)', borderWidth: 1, borderColor: colors.primary }]}
+                  onPress={handlePickGalleryPhoto}
+                >
+                  <Text style={[s.modalActionText, { color: colors.primary }]}>🖼️ Gallery</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 11, marginBottom: 10, fontWeight: '600' }}>
+                ── OR PASTE IMAGE URL ──
               </Text>
 
               {/* Custom URL Input */}
@@ -744,9 +882,22 @@ const PostsScreen: React.FC = () => {
         >
           <View style={s.modalOverlay}>
             <View style={s.pickerModalBox}>
-              <Text style={s.pickerModalTitle}>📎 Attach Document URL</Text>
+              <Text style={s.pickerModalTitle}>📎 Attach Document</Text>
               <Text style={s.pickerModalSubtitle}>
-                Enter document name and link (PDF, Audio, Document) to attach:
+                Select a document from your device or enter a document URL:
+              </Text>
+
+              {/* Native Document Picker */}
+              <TouchableOpacity
+                id="btn-post-doc-pick"
+                style={[s.modalActionButton, { backgroundColor: 'rgba(0, 255, 204, 0.12)', borderWidth: 1, borderColor: colors.primary, marginBottom: 12 }]}
+                onPress={handlePickDocument}
+              >
+                <Text style={[s.modalActionText, { color: colors.primary }]}>📂 Pick Document from Device</Text>
+              </TouchableOpacity>
+
+              <Text style={{ textAlign: 'center', color: colors.textSecondary, fontSize: 11, marginBottom: 10, fontWeight: '600' }}>
+                ── OR ENTER DOCUMENT LINK ──
               </Text>
 
               {/* Custom Document Entry */}

@@ -55,6 +55,9 @@ export interface Message {
   is_pinned: boolean;
   is_deleted: boolean;
   created_at: string;
+  is_encrypted?: boolean;
+  raw_ciphertext?: string;
+  verified?: boolean;
 }
 
 export interface Poll {

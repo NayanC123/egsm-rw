@@ -1,3 +1,7 @@
+// src/components/common/HyperlinkText.tsx
+// Hermes-safe Auto-Hyperlink Tokenizer & Link Handler.
+// STRICT ANTI-CRASH: Only built-in React Native primitives, string fontWeights, zero external navigation.
+
 import React from 'react';
 import {
   Text,
@@ -7,8 +11,6 @@ import {
   StyleProp,
   TextStyle,
 } from 'react-native';
-
-const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
 
 export interface HyperlinkTextProps {
   text: string;
@@ -32,12 +34,6 @@ export const HyperlinkText: React.FC<HyperlinkTextProps> = ({
   const handlePress = async (url: string) => {
     let targetUrl = url.trim();
 
-    // Clean trailing punctuation if matched
-    const punctMatch = targetUrl.match(/[.,;:!?)]+$/);
-    if (punctMatch) {
-      targetUrl = targetUrl.slice(0, targetUrl.length - punctMatch[0].length);
-    }
-
     if (targetUrl.toLowerCase().startsWith('www.')) {
       targetUrl = `https://${targetUrl}`;
     } else if (!/^https?:\/\//i.test(targetUrl)) {
@@ -56,78 +52,45 @@ export const HyperlinkText: React.FC<HyperlinkTextProps> = ({
     }
   };
 
-  // Tokenize the input string with URL_REGEX
-  const tokens: Array<{ text: string; isUrl: boolean }> = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  // Reset regex state before execution
-  URL_REGEX.lastIndex = 0;
-
-  while ((match = URL_REGEX.exec(text)) !== null) {
-    const matchIndex = match.index;
-    const matchedStr = match[0];
-
-    // Non-link text preceding this match
-    if (matchIndex > lastIndex) {
-      tokens.push({
-        text: text.slice(lastIndex, matchIndex),
-        isUrl: false,
-      });
-    }
-
-    // Separate clean URL from trailing punctuation
-    let linkStr = matchedStr;
-    let trailingPunct = '';
-    const punctMatch = matchedStr.match(/[.,;:!?)]+$/);
-    if (punctMatch) {
-      trailingPunct = punctMatch[0];
-      linkStr = matchedStr.slice(0, matchedStr.length - trailingPunct.length);
-    }
-
-    if (linkStr.length > 0) {
-      tokens.push({
-        text: linkStr,
-        isUrl: true,
-      });
-    }
-
-    if (trailingPunct.length > 0) {
-      tokens.push({
-        text: trailingPunct,
-        isUrl: false,
-      });
-    }
-
-    lastIndex = matchIndex + matchedStr.length;
-  }
-
-  // Any remaining plain text after the final URL match
-  if (lastIndex < text.length) {
-    tokens.push({
-      text: text.slice(lastIndex),
-      isUrl: false,
-    });
-  }
+  // Hermes-safe string split tokenizer with capturing groups
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  const parts = text.split(urlRegex);
 
   return (
     <Text style={style} numberOfLines={numberOfLines} selectable={selectable}>
-      {tokens.map((token, index) => {
-        if (token.isUrl) {
+      {parts.map((part, index) => {
+        if (!part) return null;
+
+        // Determine if this part matches the URL pattern
+        const isUrl = /^(https?:\/\/[^\s]+|www\.[^\s]+)$/i.test(part);
+
+        if (isUrl) {
+          // Detach any trailing punctuation from the clickable URL
+          let url = part;
+          let trailing = '';
+          const punctMatch = part.match(/[.,;:!?)]+$/);
+          if (punctMatch) {
+            trailing = punctMatch[0];
+            url = part.slice(0, part.length - trailing.length);
+          }
+
           return (
-            <Text
-              key={`link-${index}`}
-              style={[styles.link, linkStyle]}
-              onPress={() => handlePress(token.text)}
-              suppressHighlighting={false}
-            >
-              {token.text}
-            </Text>
+            <React.Fragment key={`link-frag-${index}`}>
+              <Text
+                style={[styles.link, linkStyle]}
+                onPress={() => handlePress(url)}
+                suppressHighlighting={false}
+              >
+                {url}
+              </Text>
+              {trailing ? <Text style={style}>{trailing}</Text> : null}
+            </React.Fragment>
           );
         }
+
         return (
           <Text key={`txt-${index}`} style={style}>
-            {token.text}
+            {part}
           </Text>
         );
       })}

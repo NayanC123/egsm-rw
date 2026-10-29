@@ -4,6 +4,7 @@
 
 import { Alert } from 'react-native';
 import { supabase } from './supabase';
+import { encryptMessage, decryptMessage } from '../utils/e2ee';
 import type {
   Message,
   Poll,
@@ -78,8 +79,16 @@ export async function fetchMessages(): Promise<MessageWithSender[]> {
         display_name: senderDisplayName,
       };
 
+      // Decrypt message content using E2EE module
+      const rawCipher = m.content || '';
+      const decrypted = decryptMessage(rawCipher);
+
       return {
         ...m,
+        content: decrypted.text,
+        raw_ciphertext: rawCipher,
+        is_encrypted: decrypted.isEncrypted,
+        verified: decrypted.verified,
         sender,
         poll: pollsMap.get(m.id),
       };
@@ -106,11 +115,14 @@ export async function sendMessage(params: SendMessageParams): Promise<MessageWit
   const { senderId, sender, content, messageType = 'text', mediaUrl = null, mediaMeta = {} } = params;
 
   try {
+    // Encrypt message content before persisting into Supabase
+    const ciphertext = encryptMessage(content);
+
     const { data, error } = await supabase
       .from('messages')
       .insert({
         sender_id: senderId,
-        content,
+        content: ciphertext,
         message_type: messageType,
         media_url: mediaUrl,
         media_meta: mediaMeta,
@@ -128,6 +140,10 @@ export async function sendMessage(params: SendMessageParams): Promise<MessageWit
 
     return {
       ...data,
+      content, // Deliver plaintext to UI for immediate feedback
+      raw_ciphertext: ciphertext,
+      is_encrypted: true,
+      verified: true,
       sender: sender || {
         id: senderId,
         username: 'user',
