@@ -22,12 +22,15 @@ import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 
-import LoginScreen           from './src/screens/LoginScreen';
-import ChatScreen            from './src/screens/ChatScreen';
-import PostsScreen           from './src/screens/PostsScreen';
-import AccountSettingsScreen from './src/screens/AccountSettingsScreen';
-import AdminPortalScreen     from './src/screens/AdminPortalScreen';
-import AccountLockModal      from './src/components/AccountLockModal';
+import LoginScreen              from './src/screens/LoginScreen';
+import ChatScreen               from './src/screens/ChatScreen';
+import PostsScreen              from './src/screens/PostsScreen';
+import AccountSettingsScreen    from './src/screens/AccountSettingsScreen';
+import AdminPortalScreen        from './src/screens/AdminPortalScreen';
+import AccountLockModal         from './src/components/AccountLockModal';
+import BlueprintGridBackground  from './src/components/common/BlueprintGridBackground';
+import { FadeSlideIn }          from './src/components/common/AnimatedPrimitives';
+import { SAFE_TOP, SAFE_BOTTOM } from './src/utils/layout';
 
 // ─────────────────────────────────────────────────────────────
 // Error Boundary
@@ -130,13 +133,20 @@ const AppShell: React.FC = () => {
   const visibleTabs = TABS.filter((t) => !t.adminOnly || user?.role === 'admin');
 
   const renderScreen = (): ReactNode => {
+    let screen: ReactNode;
     switch (activeTab) {
-      case 'chat':    return <ChatScreen />;
-      case 'posts':   return <PostsScreen />;
-      case 'account': return <AccountSettingsScreen />;
-      case 'admin':   return user?.role === 'admin' ? <AdminPortalScreen /> : <ChatScreen />;
-      default:        return <ChatScreen />;
+      case 'chat':    screen = <ChatScreen />;    break;
+      case 'posts':   screen = <PostsScreen />;   break;
+      case 'account': screen = <AccountSettingsScreen />; break;
+      case 'admin':   screen = user?.role === 'admin' ? <AdminPortalScreen /> : <ChatScreen />; break;
+      default:        screen = <ChatScreen />;    break;
     }
+    // FadeSlideIn keyed by activeTab → smoothly fades + glides when switching tabs
+    return (
+      <FadeSlideIn key={activeTab} style={{ flex: 1 }}>
+        {screen}
+      </FadeSlideIn>
+    );
   };
 
   React.useEffect(() => {
@@ -156,39 +166,83 @@ const AppShell: React.FC = () => {
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* Content area */}
-      <View style={s.content}>{renderScreen()}</View>
+      {/* Blueprint graph-paper background — behind everything */}
+      <BlueprintGridBackground />
 
-      {/* Floating Modern Bottom Dock — Hidden when software keyboard is visible */}
+      {/* Main screen content wrapper — overflow: hidden guarantees screen content never pushes bottom bar off-screen */}
+      <View style={{ flex: 1, overflow: 'hidden' }}>{renderScreen()}</View>
+
+      {/* Rebuilt Bottom Navigation Bar — Normal flex flow with SAFE_BOTTOM clearance */}
       {!isKeyboardVisible && (
-        <View style={s.dockContainer}>
-          <View style={s.floatingDock}>
+        <View
+          style={{
+            paddingHorizontal: 14,
+            paddingTop: 8,
+            paddingBottom: SAFE_BOTTOM,
+            backgroundColor: isDark ? '#050A0E' : '#F4F7F9',
+            borderTopWidth: 1,
+            borderTopColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#DCE4EC',
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: isDark ? '#0D161F' : '#FFFFFF',
+              borderRadius: 20,
+              paddingVertical: 6,
+              paddingHorizontal: 6,
+              minHeight: 58,
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#DCE4EC',
+            }}
+          >
             {visibleTabs.map((tab) => {
               const isActive = activeTab === tab.id;
+              const activeColor = isDark ? '#00FFCC' : '#00B894';
+              const inactiveColor = isDark ? '#8A9BA8' : '#5A6B78';
+              const tabColor = isActive ? activeColor : inactiveColor;
+              const pillBg = isActive ? 'rgba(0, 255, 204, 0.14)' : 'transparent';
+
               return (
                 <TouchableOpacity
                   key={tab.id}
                   id={`tab-${tab.id}`}
-                  style={[s.dockItem, isActive && s.dockItemActive]}
+                  testID={`tab-${tab.id}`}
                   onPress={() => setActiveTab(tab.id)}
                   activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${tab.label} tab`}
+                  style={{
+                    flex: 1,
+                    minHeight: 46,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 14,
+                    paddingVertical: 4,
+                    paddingHorizontal: 2,
+                    backgroundColor: pillBg,
+                  }}
                 >
-                  <Text style={[s.dockEmoji, isActive && s.dockEmojiActive]}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      marginBottom: 2,
+                      color: tabColor,
+                    }}
+                  >
                     {tab.emoji}
                   </Text>
                   <Text
-                    style={[
-                      s.dockLabel,
-                      { color: isActive ? '#00FFCC' : '#7E8E9C' },
-                      isActive && s.dockLabelActive,
-                    ]}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: isActive ? '700' : '600',
+                      color: tabColor,
+                      textAlign: 'center',
+                    }}
                     numberOfLines={1}
                   >
                     {tab.label}
                   </Text>
-                  {isActive && <View style={s.activeDot} />}
                 </TouchableOpacity>
               );
             })}
@@ -201,71 +255,12 @@ const AppShell: React.FC = () => {
   );
 };
 
-const SAFE_TOP = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
-
 const shellStyles = (c: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     safe: {
       flex: 1,
       backgroundColor: c.mainBackground,
       paddingTop: SAFE_TOP,
-    },
-    content: { flex: 1 },
-    dockContainer: {
-      position: 'relative',
-      backgroundColor: 'transparent',
-    },
-    floatingDock: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-around',
-      marginHorizontal: 16,
-      marginBottom: Platform.OS === 'ios' ? 24 : 20,
-      borderRadius: 24,
-      backgroundColor: '#0D161F',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.07)',
-      paddingVertical: 8,
-      paddingHorizontal: 6,
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
-      shadowRadius: 12,
-      elevation: 8,
-    },
-    dockItem: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 8,
-      paddingHorizontal: 4,
-      borderRadius: 18,
-    },
-    dockItemActive: {
-      backgroundColor: 'rgba(0, 255, 204, 0.12)',
-    },
-    dockEmoji: {
-      fontSize: 18,
-      marginBottom: 3,
-      opacity: 0.55,
-    },
-    dockEmojiActive: {
-      opacity: 1,
-    },
-    dockLabel: {
-      fontSize: 11,
-      fontWeight: '600',
-      letterSpacing: -0.2,
-    },
-    dockLabelActive: {
-      fontWeight: '700',
-    },
-    activeDot: {
-      width: 4,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: '#00FFCC',
-      marginTop: 3,
     },
   });
 

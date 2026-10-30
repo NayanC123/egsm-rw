@@ -83,7 +83,10 @@ Realtime: all 8 tables added to `supabase_realtime` publication.
 | `src/services/adminService.ts` | `fetchAccounts`, `createAccount`, `muteUser`, `suspendUser`, `terminateUser`, `resetUserPassword`, `fetchPasswordResetRequests`, `resolvePasswordResetRequest`, `togglePostAnnouncement`, `fetchOffenseReports`, `resolveOffenseReport`, `deleteOffendingMessage` |
 | `src/services/storageService.ts` | `uploadLocalFileToStorage` (Native multipart FormData POST to Supabase Storage `chat-media` and `post-attachments`) |
 | `src/utils/e2ee.ts` | `encryptMessage`, `decryptMessage`, `getKeyFingerprint`, `sha256`, `CIPHER_ALGORITHM`, `DEFAULT_PASSPHRASE` (Zero-dependency pure-TS stream cipher PRNG + SHA-256 MAC) |
+| `src/utils/layout.ts` | `SAFE_TOP`, `TOP_SAFE_PADDING`, `SAFE_BOTTOM` (Responsive status bar & Android navigation bar dynamic inset calculation) |
 | `src/components/common/HyperlinkText.tsx` | `HyperlinkText` (Hermes-safe string split tokenizer, native Linking browser integration with canOpenURL check and error Alert) |
+| `src/components/common/BlueprintGridBackground.tsx` | `BlueprintGridBackground` (Hairline graph grid with Teenage Engineering crosshairs & ambient glow) |
+| `src/components/common/AnimatedPrimitives.tsx` | `ScalePressable`, `FadeSlideIn`, `PulseIndicator` (Zero-dependency 60fps animation primitives) |
 | `eas.json` | EAS Build configuration: preview profile (direct Android APK) & production profile (AAB / IPA) |
 
 ## 5. Chronological Handoff Log
@@ -585,6 +588,145 @@ Since native camera and document picker libraries crash standalone APK binaries 
 - **Font Weight Audit**: 100% of `fontWeight` attributes across all components and styles verified as strict strings (`'400'`, `'500'`, `'600'`, `'700'`, `'800'`). Zero raw numbers exist.
 - **Forbidden Libraries Audit**: Zero instances of `expo-av` or `@react-navigation/*` in source files or dependencies.
 - **Version Compatibility**: Aligned across `package.json`, `app.json`, and `PROJECT_CONTEXT.md` at version `2.1.0`.
+
+---
+
+## 9. UI & Animation Upgrade — Architectural Blueprint Background, 60fps Primitives & Micro-Interactions (v2.2.0)
+
+### 9.1 Zero-Crash Architecture Constraint
+- **Strictly No New Native Libraries**: All animations implemented exclusively with React Native built-ins (`Animated`, `Easing`, `Dimensions`, `View`, `Pressable`). Zero `react-native-reanimated`, zero `react-native-svg`.
+- **String fontWeight**: Every `fontWeight` value added in this phase is a string (`'500'`, `'600'`, `'700'`). Zero raw number values.
+- **Cross-Platform**: Compiles cleanly on Android APK, iOS, and Vercel Web.
+
+### 9.2 New Component: `src/components/common/BlueprintGridBackground.tsx`
+- **Architecture**: Full-screen, non-interactive (`pointerEvents="none"`, `StyleSheet.absoluteFill`) overlay mounted as the **first child** of `SafeAreaView` in both `App.tsx` and `LoginScreen.tsx` — behind all other content.
+- **Minor Grid**: 1px hairline `View` lines every `24px` in both axes:
+  - Dark: `rgba(0, 255, 204, 0.035)` | Light: `rgba(5, 10, 14, 0.045)`
+- **Major Blueprint Grid**: Every 5th line (`120px` intervals) rendered in stronger color:
+  - Dark: `rgba(0, 255, 204, 0.08)` | Light: `rgba(0, 184, 148, 0.09)`
+  - Crosshair `5×5px` tick accents (`+`) at every major grid intersection for Teenage Engineering / Linear technical blueprint feel.
+- **Breathing Ambient Glows**: Two `Animated.View` circular glows in `Animated.loop` (duration `6000ms`, `7200ms`, staggered 3s phase offset):
+  - Top-right cyan: `rgba(0, 255, 204, 0.05)` dark / `rgba(0, 184, 148, 0.04)` light — scale pulses `1.0 → 1.08`.
+  - Bottom-left amber: `rgba(255, 102, 0, 0.04)` dark — scale pulses `1.0 → 1.12`.
+  - Both use `useNativeDriver: true`. Responsive to `Dimensions.addEventListener` orientation changes.
+
+### 9.3 New Component: `src/components/common/AnimatedPrimitives.tsx`
+Three reusable 60fps animation primitives — no third-party dependencies:
+
+#### `ScalePressable`
+- Drop-in animated wrapper around React Native `Pressable`.
+- `onPressIn`: `Animated.spring(scale, { toValue: 0.95, speed: 28, bounciness: 10, useNativeDriver: true })`.
+- `onPressOut`: Springs back to `1.0` with same config.
+- Used on: bottom-nav tabs, Login button, Show/Hide toggle, Send button, poll vote options, post cards in feed, and 0–10 rating buttons.
+
+#### `FadeSlideIn`
+- Entrance animation wrapping cards, screens, and rows.
+- On mount: `opacity 0 → 1` (`Animated.timing`, `280ms`, `Easing.out(Easing.quad)`) + `translateY 14 → 0` (`Animated.spring`, speed 18, bounciness 4).
+- `delay` prop enables staggered list entrances (e.g., `Math.min(index * 45, 300)`).
+- Used on: all tab screen transitions in `App.tsx` (keyed by `activeTab`), Login hero/card/button sections, post feed cards, leaderboard rank rows.
+
+#### `PulseIndicator`
+- Live pulsing neon dot with expanding outer ring in `Animated.loop`.
+- Ring: `scale 1 → 1.8`, `opacity 0.7 → 0` over `1100ms`, `Easing.out(Easing.quad)`.
+- Core solid dot always rendered on top.
+- Used on: E2EE `🔒 Active` header badge in `ChatScreen.tsx`, `● LIVE` indicator in `LeaderboardView.tsx`.
+
+### 9.4 Global Shell & Blueprint Canvas (`App.tsx` & `LoginScreen.tsx`)
+- **`App.tsx`**:
+  - `<BlueprintGridBackground />` mounted as first child of `<SafeAreaView>` — draws behind all screens.
+  - `renderScreen()` wraps active screen in `<FadeSlideIn key={activeTab}>` for smooth tab transitions.
+  - Bottom dock tab items replaced with `<ScalePressable>` with active tab top border glow: `borderTopWidth: 1.5`, `borderTopColor: 'rgba(0, 255, 204, 0.22)'`.
+- **`LoginScreen.tsx`**:
+  - `<BlueprintGridBackground />` mounted as first child of `<SafeAreaView>`.
+  - `StatusBar` background changed to `'transparent'`.
+  - Hero header, credential card, and action buttons each wrapped in `<FadeSlideIn delay={0 / 80 / 160}>` for staggered entrance cascade.
+
+### 9.5 Transparent Screen Wrappers (Blueprint Grid Visibility)
+All screen root container backgrounds changed to `'transparent'` so the blueprint grid canvas renders through cards and chat bubbles:
+| File | Style Key Changed |
+|---|---|
+| `ChatScreen.tsx` | `container`, `messageStreamContainer`, `KeyboardAvoidingView` inline style |
+| `PostsScreen.tsx` | `container` |
+| `LeaderboardView.tsx` | `container` |
+| `AccountSettingsScreen.tsx` | `safe` |
+| `AdminPortalScreen.tsx` | `screenContainer` |
+
+### 9.6 Chat Screen Micro-Interactions (`ChatScreen.tsx`)
+- **E2EE Badge**: Static `View` pulse dot replaced with `<PulseIndicator color="#00FFCC" size={6} />`. Badge wrapped in `<ScalePressable>`.
+- **Incoming Bubble Accent**: Non-sender (`isMe === false`) chat bubbles now have: `borderLeftWidth: 2.5`, `borderLeftColor: '#00FFCC'`, `backgroundColor: '#0B1218'` (dark mode) — makes messages pop cleanly off the blueprint grid.
+- **Send Button**: Wrapped in `<ScalePressable>` — spring bounce on tap.
+- **Poll Vote Options**: Each `TouchableOpacity` poll option replaced with `<ScalePressable>` — instant spring bounce on tapping a poll choice.
+
+### 9.7 Posts & Leaderboard Micro-Interactions
+- **`PostsScreen.tsx`**: `renderItem` wrapped each post card in `<FadeSlideIn delay={Math.min(index * 45, 300)}>` + `<ScalePressable>` for spring tap bounce. 0–10 rating buttons replaced with `<ScalePressable>`.
+- **`LeaderboardView.tsx`**: `renderRow` wrapped each rank entry in `<FadeSlideIn delay={Math.min(index * 45, 300)}>`. `● LIVE` badge upgraded with `<PulseIndicator color="#00FFCC" size={5} />`.
+
+### 9.8 Verification & Compilation Sign-Off (v2.2.0)
+- **TypeScript Compilation**: `npx tsc --noEmit` verified with **0 errors**.
+- **Font Weight Audit**: 100% string `fontWeight` values — zero raw numbers added.
+- **Forbidden Libraries**: Zero `react-native-reanimated`, `react-native-svg` in codebase or dependencies.
+- **File Modifications Summary**:
+
+| File | Changes Made |
+|---|---|
+| `src/components/common/BlueprintGridBackground.tsx` | **NEW** — Full-screen blueprint grid with minor/major lines, crosshair ticks, and breathing ambient glows |
+| `src/components/common/AnimatedPrimitives.tsx` | **NEW** — `ScalePressable`, `FadeSlideIn`, `PulseIndicator` animation primitives |
+| `App.tsx` | Mounted `BlueprintGridBackground`; FadeSlideIn tab transitions; ScalePressable dock tabs; active pill top-border glow |
+| `src/screens/LoginScreen.tsx` | Mounted `BlueprintGridBackground`; staggered FadeSlideIn at delay 0/80/160ms; ScalePressable on login button + show/hide |
+| `src/screens/ChatScreen.tsx` | Transparent backgrounds; PulseIndicator E2EE badge; ScalePressable on send + poll options; incoming bubble cyan accent bar |
+| `src/screens/PostsScreen.tsx` | Transparent container; FadeSlideIn + ScalePressable on post cards; ScalePressable on 0–10 rating buttons |
+| `src/components/Posts/LeaderboardView.tsx` | Transparent container; FadeSlideIn on rank rows; PulseIndicator on LIVE badge |
+| `src/screens/AccountSettingsScreen.tsx` | Transparent background |
+| `src/screens/AdminPortalScreen.tsx` | Transparent screenContainer |
+| `PROJECT_CONTEXT.md` | Documented full `v2.2.0` UI & Animation Upgrade |
+
+## Phase 10 (v2.2.1) — Bottom Navigation Bar & System Inset Clearance Fix
+
+### 10.1 Root Cause Analysis of Regressions
+1. **Collapsed Tab Icons / Labels**: When dock tabs were wrapped in `<ScalePressable>`, the outer `<Pressable>` lacked layout style forwarding, collapsing items within flex row containers to 0 width. Additionally, `FadeSlideIn` needed explicit style prop precedence (`style={[{ opacity, transform: [{ translateY }] }, style]}`) to ensure full `flex: 1` propagation when wrapping screen views.
+2. **Android System Navigation Bar Overlap**: The bottom bar lacked dynamic bottom system bar inset calculation on Android devices with 3-button navigation or gesture pill bars, leading to visual occlusion.
+
+### 10.2 Architectural Clearance (`src/utils/layout.ts`)
+- **`SAFE_BOTTOM` System Inset Calculation**:
+  - Dynamically computes Android bottom navigation bar inset with a guaranteed minimum clearance floor:
+    ```ts
+    const screenHeight = Dimensions.get('screen').height;
+    const windowHeight = Dimensions.get('window').height;
+    const statusBarHeight = StatusBar.currentHeight || 0;
+    const detectedNavBar = Math.max(0, screenHeight - windowHeight - statusBarHeight);
+
+    export const SAFE_BOTTOM = Platform.OS === 'android'
+      ? Math.max(detectedNavBar + 14, 34)
+      : 24;
+    ```
+  - Preserves `SAFE_TOP` and `TOP_SAFE_PADDING` for backwards compatibility across existing modals and screens.
+
+### 10.3 Primitive Anti-Collapsing Upgrades (`src/components/common/AnimatedPrimitives.tsx`)
+- **`FadeSlideIn`**: Style prop placed last in animated view array (`style={[{ opacity, transform: [{ translateY }] }, style]}`) guaranteeing callers can specify `flex: 1` as a screen wrapper without truncation.
+- **`ScalePressable`**: Outer `<Animated.View>` forwards `flex`, `alignItems`, `justifyContent`, `alignSelf`, `dimensions`, and `margins`, while inner `<Pressable>` receives full interactive styling (`padding`, `backgroundColor`, `borderRadius`) plus `hasFlex && { flex: 1, width: '100%' }`, ensuring children never collapse to 0px.
+
+### 10.4 Rebuilt Bottom Navigation Bar (`App.tsx`)
+- **Screen Viewport Isolation**: Main screen content wrapper given `style={{ flex: 1, overflow: 'hidden' }}` so long feeds or message streams never push the navigation bar off-screen.
+- **Natural Flex Flow**: Kept in normal flex flow (no `position: 'absolute', bottom: 0'`) at the bottom of the root container with explicit `paddingBottom: SAFE_BOTTOM`.
+- **Guaranteed Visible Items**:
+  - Built with native `TouchableOpacity` (`flex: 1`, `minHeight: 46`, `alignItems: 'center'`, `justifyContent: 'center'`).
+  - Active pill: background `'rgba(0, 255, 204, 0.14)'` with high-contrast text/icon color `#00FFCC` (dark) / `#00B894` (light).
+  - Inactive tab: `#8A9BA8` (dark) / `#5A6B78` (light).
+  - Explicit icon `<Text>` (fontSize 16) and label `<Text>` (fontSize 11, `fontWeight: isActive ? '700' : '600'`, `numberOfLines={1}`).
+
+### 10.5 Verification & Sign-Off (v2.2.1)
+- **TypeScript Compilation**: `npx tsc --noEmit` verified with **0 errors**.
+- **Font Weight Audit**: 100% string `fontWeight` values (`'600'`, `'700'`). Zero raw numbers.
+- **Forbidden Libraries**: Zero native navigation or reanimated dependencies.
+
+| File | Changes Made |
+|---|---|
+| `src/utils/layout.ts` | Added `SAFE_BOTTOM` dynamic Android navigation bar inset detection (floor 34px) |
+| `src/components/common/AnimatedPrimitives.tsx` | Fixed `FadeSlideIn` style precedence (`flex: 1`) and `ScalePressable` outer/inner layout forwarding |
+| `App.tsx` | Rebuilt bottom navigation bar with flex flow, `overflow: 'hidden'` content wrapper, `SAFE_BOTTOM` clearance, and high-contrast visible icons/labels |
+| `PROJECT_CONTEXT.md` | Documented full Phase 10 (v2.2.1) fixes and verification |
+
+
 
 
 

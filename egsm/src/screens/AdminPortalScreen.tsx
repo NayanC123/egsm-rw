@@ -1413,7 +1413,7 @@ const adminStyles = (c: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     screenContainer: {
       flex: 1,
-      backgroundColor: c.mainBackground,
+      backgroundColor: 'transparent',
     },
     topBar: {
       flexDirection: 'row',

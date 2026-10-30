@@ -28,6 +28,7 @@ import { fetchPosts } from '../../services/postsService';
 import { useTheme } from '../../context/ThemeContext';
 import { SAFE_TOP } from '../../utils/layout';
 import type { LeaderboardEntry, Profile } from '../../types/database';
+import { FadeSlideIn, PulseIndicator } from '../common/AnimatedPrimitives';
 
 const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
 
@@ -297,7 +298,8 @@ const LeaderboardView: React.FC<LeaderboardViewProps> = ({ onBack }) => {
         <Text style={s.headerTitle}>🏆 Live Leaderboard</Text>
         {isSupabaseConfigured && (
           <View style={[s.liveDot, isLive ? s.liveDotActive : s.liveDotInactive]}>
-            <Text style={s.liveDotText}>{isLive ? '● LIVE' : '○ SYNC'}</Text>
+            {isLive && <PulseIndicator color="#00FFCC" size={5} />}
+            <Text style={[s.liveDotText, { marginLeft: isLive ? 6 : 0 }]}>{isLive ? '● LIVE' : '○ SYNC'}</Text>
           </View>
         )}
       </View>
@@ -316,7 +318,7 @@ const LeaderboardView: React.FC<LeaderboardViewProps> = ({ onBack }) => {
     </View>
   );
 
-  const renderRow = ({ item }: { item: LeaderboardEntry }) => {
+  const renderRow = ({ item, index }: { item: LeaderboardEntry; index: number }) => {
     const rank = item.rank;
     const isTop3 = rank <= 3;
     const rankIcon =
@@ -331,53 +333,56 @@ const LeaderboardView: React.FC<LeaderboardViewProps> = ({ onBack }) => {
         : colors.textSecondary;
     const satPct = Math.min(Math.max(item.satisfactionRate, 0), 100);
     const barWidth = `${satPct}%` as `${number}%`;
+    const staggerDelay = Math.min(index * 45, 300);
 
     return (
-      <View
-        style={[
-          s.rankRow,
-          isTop3 && s.rankRowTop3,
-          rank === 1 && s.rankRow1,
-          rank === 2 && s.rankRow2,
-          rank === 3 && s.rankRow3,
-        ]}
-      >
-        {/* Left: Rank badge */}
-        <View style={[s.rankBadgeWrap, { borderColor: rankColor }]}>
-          <Text style={[s.rankNumText, { color: rankColor }]}>#{rank}</Text>
-          {rankIcon ? <Text style={s.rankIconText}>{rankIcon}</Text> : null}
-        </View>
-
-        {/* Middle: User info + bar */}
-        <View style={s.memberInfoCol}>
-          <Text style={s.memberDisplayName} numberOfLines={1}>
-            {item.profile.display_name}
-          </Text>
-          <Text style={s.memberUsername} numberOfLines={1}>
-            @{item.profile.username}
-          </Text>
-
-          {/* Satisfaction Progress Bar */}
-          <View style={s.satBarTrack}>
-            <View style={[s.satBarFill, { width: barWidth, backgroundColor: rankColor }]} />
+      <FadeSlideIn delay={staggerDelay}>
+        <View
+          style={[
+            s.rankRow,
+            isTop3 && s.rankRowTop3,
+            rank === 1 && s.rankRow1,
+            rank === 2 && s.rankRow2,
+            rank === 3 && s.rankRow3,
+          ]}
+        >
+          {/* Left: Rank badge */}
+          <View style={[s.rankBadgeWrap, { borderColor: rankColor }]}>
+            <Text style={[s.rankNumText, { color: rankColor }]}>#{rank}</Text>
+            {rankIcon ? <Text style={s.rankIconText}>{rankIcon}</Text> : null}
           </View>
 
-          {/* Weekly post badge */}
-          <View style={s.weeklyBadge}>
-            <Text style={s.weeklyBadgeText}>
-              {item.recentPosts} post{item.recentPosts !== 1 ? 's' : ''} this wk
+          {/* Middle: User info + bar */}
+          <View style={s.memberInfoCol}>
+            <Text style={s.memberDisplayName} numberOfLines={1}>
+              {item.profile.display_name}
             </Text>
+            <Text style={s.memberUsername} numberOfLines={1}>
+              @{item.profile.username}
+            </Text>
+
+            {/* Satisfaction Progress Bar */}
+            <View style={s.satBarTrack}>
+              <View style={[s.satBarFill, { width: barWidth, backgroundColor: rankColor }]} />
+            </View>
+
+            {/* Weekly post badge */}
+            <View style={s.weeklyBadge}>
+              <Text style={s.weeklyBadgeText}>
+                {item.recentPosts} post{item.recentPosts !== 1 ? 's' : ''} this wk
+              </Text>
+            </View>
+          </View>
+
+          {/* Right: Satisfaction % */}
+          <View style={s.satRateCol}>
+            <Text style={[s.satRatePct, { color: rankColor }]}>
+              {item.satisfactionRate.toFixed(1)}%
+            </Text>
+            <Text style={s.satRateLabel}>Satisfaction</Text>
           </View>
         </View>
-
-        {/* Right: Satisfaction % */}
-        <View style={s.satRateCol}>
-          <Text style={[s.satRatePct, { color: rankColor }]}>
-            {item.satisfactionRate.toFixed(1)}%
-          </Text>
-          <Text style={s.satRateLabel}>Satisfaction</Text>
-        </View>
-      </View>
+      </FadeSlideIn>
     );
   };
 
@@ -458,7 +463,7 @@ const createStyles = (
     // ── Layout ──────────────────────────────────────────────
     container: {
       flex: 1,
-      backgroundColor: '#050A0E',
+      backgroundColor: 'transparent',
     },
 
     // ── Top navigation bar ───────────────────────────────────

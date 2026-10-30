@@ -46,6 +46,7 @@ import type {
 } from '../types/database';
 import { SAFE_TOP } from '../utils/layout';
 import { HyperlinkText } from '../components/common/HyperlinkText';
+import { PulseIndicator, ScalePressable } from '../components/common/AnimatedPrimitives';
 import { CIPHER_ALGORITHM, getKeyFingerprint, encryptMessage, decryptMessage } from '../utils/e2ee';
 import { uploadLocalFileToStorage } from '../services/storageService';
 
@@ -748,7 +749,7 @@ const ChatScreen: React.FC = () => {
             const isMyChoice = userVote?.option_index === idx;
 
             return (
-              <TouchableOpacity
+              <ScalePressable
                 key={idx}
                 id={`poll-opt-${idx}`}
                 style={[
@@ -759,7 +760,6 @@ const ChatScreen: React.FC = () => {
                   },
                 ]}
                 onPress={() => handleVote(poll.id, idx)}
-                activeOpacity={0.7}
               >
                 {/* Background progress fill */}
                 <View
@@ -780,7 +780,7 @@ const ChatScreen: React.FC = () => {
                     {count} ({pct}%)
                   </Text>
                 </View>
-              </TouchableOpacity>
+              </ScalePressable>
             );
           })}
         </View>
@@ -814,7 +814,15 @@ const ChatScreen: React.FC = () => {
             styles.bubbleContainer,
             isMe
               ? [styles.bubbleMe, { backgroundColor: isDark ? '#112230' : '#E6F4F1', borderColor: colors.primary }]
-              : [styles.bubbleOther, { backgroundColor: isDark ? '#0D161E' : '#FFFFFF', borderColor: colors.border }],
+              : [
+                  styles.bubbleOther,
+                  {
+                    backgroundColor: isDark ? '#0B1218' : '#FFFFFF',
+                    borderColor: colors.border,
+                    borderLeftWidth: 2.5,
+                    borderLeftColor: '#00FFCC',
+                  },
+                ],
             item.is_pinned && styles.pinnedBubbleBorder,
           ]}
         >
@@ -1052,18 +1060,16 @@ const ChatScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* 🔒 Sleek #00FFCC Security Badge (Tappable Inspector Trigger) */}
-        <TouchableOpacity
+        <ScalePressable
           id="e2ee-header-security-badge"
           style={styles.e2eeHeaderBadge}
           onPress={() => setIsE2eeModalOpen(true)}
-          activeOpacity={0.7}
         >
-          <View style={styles.e2eePulseDot} />
-          <Text style={styles.e2eeHeaderBadgeText}>
+          <PulseIndicator color="#00FFCC" size={6} />
+          <Text style={[styles.e2eeHeaderBadgeText, { marginLeft: 8 }]}>
             🔒 E2EE Active • Zero-Knowledge Cloud
           </Text>
-        </TouchableOpacity>
+        </ScalePressable>
       </View>
 
       {/* ── Sticky Pinned Messages Banner ── */}
@@ -1172,7 +1178,7 @@ const ChatScreen: React.FC = () => {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1, backgroundColor: '#050A0E' }}
+        style={{ flex: 1, backgroundColor: 'transparent' }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {/* ── Message Stream Container (Strictly Defined Viewport Height) ── */}
@@ -1315,7 +1321,7 @@ const ChatScreen: React.FC = () => {
                 returnKeyType="send"
               />
 
-              <TouchableOpacity
+              <ScalePressable
                 id="chat-send-btn"
                 style={[
                   styles.sendBtn,
@@ -1339,7 +1345,7 @@ const ChatScreen: React.FC = () => {
                 <Text style={styles.sendBtnText}>
                   {spamLimiter.sendLocked ? `${spamLimiter.remainingSeconds}s` : '➤'}
                 </Text>
-              </TouchableOpacity>
+              </ScalePressable>
             </View>
           </View>
       </KeyboardAvoidingView>
@@ -2199,11 +2205,11 @@ const ChatScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050A0E',
+    backgroundColor: 'transparent',
   },
   messageStreamContainer: {
     flex: 1,
-    backgroundColor: '#050A0E',
+    backgroundColor: 'transparent',
   },
   flatListContentContainer: {
     paddingHorizontal: 16,

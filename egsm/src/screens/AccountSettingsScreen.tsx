@@ -375,7 +375,7 @@ const styles = (
   StyleSheet.create({
     safe: {
       flex: 1,
-      backgroundColor: c.mainBackground,
+      backgroundColor: 'transparent',
     },
     flex: {
       flex: 1,

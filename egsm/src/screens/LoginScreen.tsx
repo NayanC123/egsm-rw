@@ -22,6 +22,8 @@ import {
 import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useAuth } from '../context/AuthContext';
 import AccountLockModal from '../components/AccountLockModal';
+import BlueprintGridBackground from '../components/common/BlueprintGridBackground';
+import { FadeSlideIn, ScalePressable } from '../components/common/AnimatedPrimitives';
 
 const LoginScreen: React.FC = () => {
   const { login, submitPasswordReset, isLoading } = useAuth();
@@ -121,9 +123,12 @@ const LoginScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* Blueprint graph-paper background */}
+      <BlueprintGridBackground />
+
       <StatusBar
         barStyle="light-content"
-        backgroundColor="#050A0E"
+        backgroundColor="transparent"
         translucent={Platform.OS === 'android'}
       />
       <KeyboardAvoidingView
@@ -137,122 +142,126 @@ const LoginScreen: React.FC = () => {
           bounces={false}
         >
           <View style={styles.topSection}>
-            {/* 1. Hero Brand Identity */}
-            <View style={styles.brandContainer}>
-              <Text style={styles.heroLogo}>
-                egsm<Text style={styles.heroDot}>.</Text>
-              </Text>
-              <Text style={styles.heroSubtitle}>
-                A private, invite-only social collective.
-              </Text>
-              <View style={styles.microPill}>
-                <Text style={styles.microPillText}>🔒 Admin Provisioned</Text>
-              </View>
-            </View>
-
-            {/* 2. Tactile, Modern Input Fields */}
-            <View style={styles.formContainer}>
-              {/* Username Field */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.inputLabel}>USERNAME</Text>
-                <View
-                  style={[
-                    styles.inputContainer,
-                    focusedField === 'username' && styles.inputContainerFocused,
-                  ]}
-                >
-                  <TextInput
-                    id="login-username"
-                    style={styles.textInput}
-                    value={username}
-                    onChangeText={(text) => {
-                      setUsername(text);
-                      if (error) setError(null);
-                    }}
-                    onFocus={() => setFocusedField('username')}
-                    onBlur={() => setFocusedField(null)}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholderTextColor="#3B4A56"
-                    placeholder="Enter your username"
-                  />
+            {/* 1. Hero Brand Identity — FadeSlideIn delay=0 */}
+            <FadeSlideIn delay={0}>
+              <View style={styles.brandContainer}>
+                <Text style={styles.heroLogo}>
+                  egsm<Text style={styles.heroDot}>.</Text>
+                </Text>
+                <Text style={styles.heroSubtitle}>
+                  A private, invite-only social collective.
+                </Text>
+                <View style={styles.microPill}>
+                  <Text style={styles.microPillText}>🔒 Admin Provisioned</Text>
                 </View>
               </View>
+            </FadeSlideIn>
 
-              {/* Password Field */}
-              <View style={styles.fieldGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.inputLabel}>PASSWORD</Text>
-                </View>
-                <View
-                  style={[
-                    styles.inputContainer,
-                    focusedField === 'password' && styles.inputContainerFocused,
-                  ]}
-                >
-                  <TextInput
-                    id="login-password"
-                    style={[styles.textInput, styles.passwordTextInput]}
-                    value={password}
-                    onChangeText={(text) => {
-                      setPassword(text);
-                      if (error) setError(null);
-                    }}
-                    onFocus={() => setFocusedField('password')}
-                    onBlur={() => setFocusedField(null)}
-                    secureTextEntry={!showPassword}
-                    placeholderTextColor="#3B4A56"
-                    placeholder="••••••••••••"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowPassword((prev) => !prev)}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    style={styles.showToggleBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="Toggle password visibility"
+            {/* 2. Credential Card — FadeSlideIn delay=80 */}
+            <FadeSlideIn delay={80}>
+              <View style={styles.formContainer}>
+                {/* Username Field */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.inputLabel}>USERNAME</Text>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      focusedField === 'username' && styles.inputContainerFocused,
+                    ]}
                   >
-                    <Text style={styles.showToggleText}>
-                      {showPassword ? 'Hide' : 'Show'}
-                    </Text>
-                  </TouchableOpacity>
+                    <TextInput
+                      id="login-username"
+                      style={styles.textInput}
+                      value={username}
+                      onChangeText={(text) => {
+                        setUsername(text);
+                        if (error) setError(null);
+                      }}
+                      onFocus={() => setFocusedField('username')}
+                      onBlur={() => setFocusedField(null)}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      placeholderTextColor="#3B4A56"
+                      placeholder="Enter your username"
+                    />
+                  </View>
                 </View>
+
+                {/* Password Field */}
+                <View style={styles.fieldGroup}>
+                  <View style={styles.labelRow}>
+                    <Text style={styles.inputLabel}>PASSWORD</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      focusedField === 'password' && styles.inputContainerFocused,
+                    ]}
+                  >
+                    <TextInput
+                      id="login-password"
+                      style={[styles.textInput, styles.passwordTextInput]}
+                      value={password}
+                      onChangeText={(text) => {
+                        setPassword(text);
+                        if (error) setError(null);
+                      }}
+                      onFocus={() => setFocusedField('password')}
+                      onBlur={() => setFocusedField(null)}
+                      secureTextEntry={!showPassword}
+                      placeholderTextColor="#3B4A56"
+                      placeholder="••••••••••••"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <ScalePressable
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      style={styles.showToggleBtn}
+                    >
+                      <Text style={styles.showToggleText}>
+                        {showPassword ? 'Hide' : 'Show'}
+                      </Text>
+                    </ScalePressable>
+                  </View>
+                </View>
+
+                {/* Error Message */}
+                {error ? (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorIcon}>⚠️</Text>
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
               </View>
+            </FadeSlideIn>
 
-              {/* Error Message */}
-              {error ? (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorIcon}>⚠️</Text>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
+            {/* 3. Login Button — FadeSlideIn delay=160 */}
+            <FadeSlideIn delay={160}>
+              <View>
+                <ScalePressable
+                  id="login-btn"
+                  style={[styles.primaryBtn, isLoading && styles.btnDisabled]}
+                  onPress={handleLogin}
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color="#050A0E" size="small" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>LOGIN</Text>
+                  )}
+                </ScalePressable>
 
-              {/* 3. Premium Action Button */}
-              <TouchableOpacity
-                id="login-btn"
-                style={[styles.primaryBtn, isLoading && styles.btnDisabled]}
-                onPress={handleLogin}
-                disabled={isLoading}
-                activeOpacity={0.8}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#050A0E" size="small" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>LOGIN</Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Forgot Password Link */}
-              <TouchableOpacity
-                id="forgot-password-btn"
-                onPress={openForgotModal}
-                style={styles.forgotBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.forgotText}>Forgot your password?</Text>
-              </TouchableOpacity>
-            </View>
+                {/* Forgot Password Link */}
+                <ScalePressable
+                  id="forgot-password-btn"
+                  onPress={openForgotModal}
+                  style={styles.forgotBtn}
+                >
+                  <Text style={styles.forgotText}>Forgot your password?</Text>
+                </ScalePressable>
+              </View>
+            </FadeSlideIn>
           </View>
 
           {/* 4. Quiet Footer */}

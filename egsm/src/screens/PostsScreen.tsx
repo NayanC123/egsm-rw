@@ -37,6 +37,7 @@ import {
 import type { DocumentAttachment } from '../types/database';
 import LeaderboardView from '../components/Posts/LeaderboardView';
 import { HyperlinkText } from '../components/common/HyperlinkText';
+import { FadeSlideIn, ScalePressable } from '../components/common/AnimatedPrimitives';
 import { uploadLocalFileToStorage } from '../services/storageService';
 
 const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
@@ -507,93 +508,95 @@ const PostsScreen: React.FC = () => {
                 </View>
               ) : null
             }
-            renderItem={({ item }) => {
+            renderItem={({ item, index }) => {
               const isAnnouncement = item.is_announcement;
               const satRate = item.satisfactionRate;
               const hasRatings = satRate !== null;
+              const staggerDelay = Math.min(index * 45, 300);
 
               return (
-                <TouchableOpacity
-                  id={`post-card-${item.id}`}
-                  style={[
-                    s.postCard,
-                    isAnnouncement ? s.announcementCard : s.regularCard,
-                  ]}
-                  onPress={() => handleOpenDetail(item.id)}
-                  activeOpacity={0.8}
-                >
-                  {/* Announcement Banner */}
-                  {isAnnouncement && (
-                    <View style={s.announcementBadgeRow}>
-                      <Text style={s.announcementBadgeText}>📢 ANNOUNCEMENT — PINNED</Text>
-                    </View>
-                  )}
+                <FadeSlideIn delay={staggerDelay}>
+                  <ScalePressable
+                    id={`post-card-${item.id}`}
+                    style={[
+                      s.postCard,
+                      isAnnouncement ? s.announcementCard : s.regularCard,
+                    ]}
+                    onPress={() => handleOpenDetail(item.id)}
+                  >
+                    {/* Announcement Banner */}
+                    {isAnnouncement && (
+                      <View style={s.announcementBadgeRow}>
+                        <Text style={s.announcementBadgeText}>📢 ANNOUNCEMENT — PINNED</Text>
+                      </View>
+                    )}
 
-                  {/* Author & Timestamp */}
-                  <View style={s.postMetaRow}>
-                    <View style={s.authorInfo}>
-                      <Text style={s.authorDisplayName} numberOfLines={1}>
-                        {item.author.display_name}
-                      </Text>
-                      <Text style={s.authorUsername} numberOfLines={1}>
-                        @{item.author.username}
-                      </Text>
-                    </View>
-                    <Text style={s.timestampText}>{formatTime(item.created_at)}</Text>
-                  </View>
-
-                  {/* Subject */}
-                  <Text style={s.postSubject} numberOfLines={2}>
-                    {item.subject}
-                  </Text>
-
-                  {/* Content Preview */}
-                  <HyperlinkText
-                    text={item.content}
-                    style={s.postPreviewText}
-                    numberOfLines={2}
-                  />
-
-                  {/* Footer Row: Attachments & Satisfaction Rate */}
-                  <View style={s.postFooterRow}>
-                    {/* Attachment Indicators */}
-                    <View style={s.attachmentPillsRow}>
-                      {item.image_urls.length > 0 && (
-                        <View style={s.attachmentIndicator}>
-                          <Text style={s.attachmentIndicatorText}>
-                            📷 {item.image_urls.length}
-                          </Text>
-                        </View>
-                      )}
-                      {item.document_urls.length > 0 && (
-                        <View style={s.attachmentIndicator}>
-                          <Text style={s.attachmentIndicatorText}>
-                            📎 {item.document_urls.length}
-                          </Text>
-                        </View>
-                      )}
+                    {/* Author & Timestamp */}
+                    <View style={s.postMetaRow}>
+                      <View style={s.authorInfo}>
+                        <Text style={s.authorDisplayName} numberOfLines={1}>
+                          {item.author.display_name}
+                        </Text>
+                        <Text style={s.authorUsername} numberOfLines={1}>
+                          @{item.author.username}
+                        </Text>
+                      </View>
+                      <Text style={s.timestampText}>{formatTime(item.created_at)}</Text>
                     </View>
 
-                    {/* Live Satisfaction Rate Badge */}
-                    <View
-                      style={[
-                        s.satisfactionBadge,
-                        hasRatings ? s.satisfactionBadgeActive : s.satisfactionBadgeEmpty,
-                      ]}
-                    >
-                      <Text
+                    {/* Subject */}
+                    <Text style={s.postSubject} numberOfLines={2}>
+                      {item.subject}
+                    </Text>
+
+                    {/* Content Preview */}
+                    <HyperlinkText
+                      text={item.content}
+                      style={s.postPreviewText}
+                      numberOfLines={2}
+                    />
+
+                    {/* Footer Row: Attachments & Satisfaction Rate */}
+                    <View style={s.postFooterRow}>
+                      {/* Attachment Indicators */}
+                      <View style={s.attachmentPillsRow}>
+                        {item.image_urls.length > 0 && (
+                          <View style={s.attachmentIndicator}>
+                            <Text style={s.attachmentIndicatorText}>
+                              📷 {item.image_urls.length}
+                            </Text>
+                          </View>
+                        )}
+                        {item.document_urls.length > 0 && (
+                          <View style={s.attachmentIndicator}>
+                            <Text style={s.attachmentIndicatorText}>
+                              📎 {item.document_urls.length}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Live Satisfaction Rate Badge */}
+                      <View
                         style={[
-                          s.satisfactionBadgeText,
-                          hasRatings ? s.satisfactionTextActive : s.satisfactionTextEmpty,
+                          s.satisfactionBadge,
+                          hasRatings ? s.satisfactionBadgeActive : s.satisfactionBadgeEmpty,
                         ]}
                       >
-                        {hasRatings
-                          ? `★ ${satRate.toFixed(1)}% Satisfaction`
-                          : 'No ratings yet (0.0%)'}
-                      </Text>
+                        <Text
+                          style={[
+                            s.satisfactionBadgeText,
+                            hasRatings ? s.satisfactionTextActive : s.satisfactionTextEmpty,
+                          ]}
+                        >
+                          {hasRatings
+                            ? `★ ${satRate.toFixed(1)}% Satisfaction`
+                            : 'No ratings yet (0.0%)'}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                </TouchableOpacity>
+                  </ScalePressable>
+                </FadeSlideIn>
               );
             }}
             ListEmptyComponent={
@@ -1162,14 +1165,11 @@ const PostsScreen: React.FC = () => {
               {scoreButtons.map((scoreVal) => {
                 const isSelected = myScore === scoreVal;
                 return (
-                  <TouchableOpacity
+                  <ScalePressable
                     key={`score-btn-${scoreVal}`}
                     id={`btn-rate-${scoreVal}`}
                     style={[s.numberButton, isSelected && s.numberButtonSelected]}
                     onPress={() => handleRate(scoreVal)}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Rate ${scoreVal} out of 10`}
                   >
                     <Text
                       style={[
@@ -1179,7 +1179,7 @@ const PostsScreen: React.FC = () => {
                     >
                       {scoreVal}
                     </Text>
-                  </TouchableOpacity>
+                  </ScalePressable>
                 );
               })}
             </View>
@@ -1288,7 +1288,7 @@ const createStyles = (c: ReturnType<typeof useTheme>['colors'], isDark: boolean)
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#050A0E',
+      backgroundColor: 'transparent',
     },
     centeredContent: {
       flex: 1,
