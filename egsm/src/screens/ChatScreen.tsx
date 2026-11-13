@@ -23,6 +23,7 @@ import {
   Keyboard,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Switch,
 } from 'react-native';
 import { TOP_SAFE_PADDING } from '../utils/layout';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
@@ -49,6 +50,12 @@ import { HyperlinkText } from '../components/common/HyperlinkText';
 import { PulseIndicator, ScalePressable } from '../components/common/AnimatedPrimitives';
 import { CIPHER_ALGORITHM, getKeyFingerprint, encryptMessage, decryptMessage } from '../utils/e2ee';
 import { uploadLocalFileToStorage } from '../services/storageService';
+import {
+  analyzeContentSafety,
+  getEdgeAiDiagnostics,
+  normalizeText,
+  SafetyAnalysisResult,
+} from '../utils/edgeAiGuard';
 
 const SAFE_TOP_INLINE = Platform.OS === 'android' ? Math.max((StatusBar.currentHeight || 28) + 14, 44) : 50;
 
@@ -159,6 +166,19 @@ const ChatScreen: React.FC = () => {
   const [isE2eeModalOpen, setIsE2eeModalOpen] = useState<boolean>(false);
   const [inspectorDemoText, setInspectorDemoText] = useState<string>('Hello from Science Exhibition! 🔬🔒');
 
+  // Edge-AI Moderation Shield Modal & State
+  const [isEdgeAiEnabled, setIsEdgeAiEnabled] = useState<boolean>(true);
+  const [isEdgeAiModalOpen, setIsEdgeAiModalOpen] = useState<boolean>(false);
+  const [edgeAiDemoText, setEdgeAiDemoText] = useState<string>('You are an amazing team! 🚀');
+
+  // Edge-AI Real-Time Safety Analysis for message input
+  const safetyResult = useMemo<SafetyAnalysisResult>(() => {
+    if (!isEdgeAiEnabled || !inputText.trim()) {
+      return { isFlagged: false, toxicityScore: 0, reason: null };
+    }
+    return analyzeContentSafety(inputText);
+  }, [inputText, isEdgeAiEnabled]);
+
   // Create Poll Modal
   const [isPollModalOpen, setIsPollModalOpen] = useState<boolean>(false);
   const [pollQuestion, setPollQuestion] = useState<string>('');
@@ -223,6 +243,10 @@ const ChatScreen: React.FC = () => {
         setIsE2eeModalOpen(false);
         return true;
       }
+      if (isEdgeAiModalOpen) {
+        setIsEdgeAiModalOpen(false);
+        return true;
+      }
       if (isActionModalOpen) {
         setIsActionModalOpen(false);
         return true;
@@ -251,6 +275,7 @@ const ChatScreen: React.FC = () => {
   }, [
     zoomImageUrl,
     isE2eeModalOpen,
+    isEdgeAiModalOpen,
     isActionModalOpen,
     isReportModalOpen,
     isGifModalOpen,
@@ -347,13 +372,12 @@ const ChatScreen: React.FC = () => {
 
   // ─── Actions ────────────────────────────────────────────────
 
-  // Send standard text message
-  const handleSendText = async () => {
-    const text = inputText.trim();
-    if (!text || !user) return;
+  // Proceed sending text message after passing limiter and safety confirmation
+  const proceedSendText = async (textToSend: string) => {
+    if (!user) return;
 
     // Check spam limiter
-    const allowed = spamLimiter.checkMessage(text, false);
+    const allowed = spamLimiter.checkMessage(textToSend, false);
     if (!allowed) return;
 
     setInputText('');
@@ -365,13 +389,42 @@ const ChatScreen: React.FC = () => {
           username: user.username,
           display_name: user.display_name,
         },
-        content: text,
+        content: textToSend,
         messageType: 'text',
       });
       setMessages((prev) => [...prev, newMsg]);
     } catch (err) {
       Alert.alert('Send Error', 'Failed to deliver message.');
     }
+  };
+
+  // Send standard text message with On-Device Edge-AI Moderation Guard
+  const handleSendText = async () => {
+    const text = inputText.trim();
+    if (!text || !user) return;
+
+    // Check on-device edge-ai content safety
+    if (isEdgeAiEnabled) {
+      const safety = analyzeContentSafety(text);
+      if (safety.isFlagged) {
+        Alert.alert(
+          'Content Advisory',
+          `Our on-device safety guard detected hostile language (${safety.toxicityScore}% score). Are you sure you want to send this?`,
+          [
+            { text: 'Edit Message', style: 'cancel' },
+            {
+              text: 'Send Anyway',
+              onPress: () => {
+                proceedSendText(text);
+              },
+            },
+          ]
+        );
+        return;
+      }
+    }
+
+    proceedSendText(text);
   };
 
   // Send GIF
@@ -1060,16 +1113,36 @@ const ChatScreen: React.FC = () => {
           </View>
         </View>
 
-        <ScalePressable
-          id="e2ee-header-security-badge"
-          style={styles.e2eeHeaderBadge}
-          onPress={() => setIsE2eeModalOpen(true)}
-        >
-          <PulseIndicator color="#00FFCC" size={6} />
-          <Text style={[styles.e2eeHeaderBadgeText, { marginLeft: 8 }]}>
-            🔒 E2EE Active • Zero-Knowledge Cloud
-          </Text>
-        </ScalePressable>
+        <View style={styles.headerBadgesRow}>
+          <ScalePressable
+            id="e2ee-header-security-badge"
+            style={styles.e2eeHeaderBadge}
+            onPress={() => setIsE2eeModalOpen(true)}
+          >
+            <PulseIndicator color="#00FFCC" size={6} />
+            <Text style={[styles.e2eeHeaderBadgeText, { marginLeft: 8 }]}>
+              🔒 E2EE Active • Zero-Knowledge
+            </Text>
+          </ScalePressable>
+
+          <ScalePressable
+            id="edge-ai-header-badge"
+            style={[
+              styles.edgeAiHeaderBadge,
+              !isEdgeAiEnabled && styles.edgeAiHeaderBadgeDisabled,
+            ]}
+            onPress={() => setIsEdgeAiModalOpen(true)}
+          >
+            <Text
+              style={[
+                styles.edgeAiHeaderBadgeText,
+                !isEdgeAiEnabled && { color: colors.textSecondary },
+              ]}
+            >
+              🛡️ Edge-AI: {isEdgeAiEnabled ? 'ON' : 'OFF'}
+            </Text>
+          </ScalePressable>
+        </View>
       </View>
 
       {/* ── Sticky Pinned Messages Banner ── */}
@@ -1221,6 +1294,15 @@ const ChatScreen: React.FC = () => {
           <View style={[styles.mediaCooldownBar, { backgroundColor: isDark ? '#1C1200' : '#FFF5E6', borderColor: colors.accent }]}>
             <Text style={[styles.mediaCooldownText, { color: colors.accent }]}>
               ⏳ Media Cooldown Active: {spamLimiter.mediaRemainingSeconds}s remaining (max 4 per 60s)
+            </Text>
+          </View>
+        )}
+
+        {/* ── Edge-AI Moderation Shield Warning Pill ── */}
+        {safetyResult.isFlagged && (
+          <View style={styles.edgeAiWarningPill}>
+            <Text style={styles.edgeAiWarningText}>
+              🛡️ Edge-AI Guard: High Toxicity Detected ({safetyResult.toxicityScore}%)
             </Text>
           </View>
         )}
@@ -2068,6 +2150,202 @@ const ChatScreen: React.FC = () => {
         </View>
       </Modal>
 
+      {/* ── Edge-AI Moderation Shield Info & Sandbox Modal ── */}
+      <Modal
+        visible={isEdgeAiModalOpen}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setIsEdgeAiModalOpen(false)}
+      >
+        <View style={[styles.fullModalContainer, { backgroundColor: colors.mainBackground, paddingTop: SAFE_TOP_INLINE }]}>
+          <View style={[styles.fullModalHeader, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+            <View>
+              <Text style={[styles.fullModalTitle, { color: colors.primary }]}>
+                🛡️ Edge-AI Moderation Shield
+              </Text>
+              <Text style={[{ color: colors.textSecondary, fontSize: 11, marginTop: 2 }]}>
+                Privacy-Preserving Local Content Guard
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setIsEdgeAiModalOpen(false)} style={styles.closeModalBtn}>
+              <Text style={[styles.closeModalBtnText, { color: colors.textPrimary }]}>✕ Close</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.attachModalBody} contentContainerStyle={{ paddingBottom: 40 }}>
+            {/* Status & Privacy Guarantee Card */}
+            <View style={[styles.inspectorCard, { borderColor: isEdgeAiEnabled ? colors.primary : colors.border, backgroundColor: colors.surface }]}>
+              <View style={styles.inspectorStatusBadgeRow}>
+                <View style={[styles.statusDot, { backgroundColor: isEdgeAiEnabled ? colors.primary : '#7E8E9C' }]} />
+                <Text style={[styles.inspectorBadgeText, { color: isEdgeAiEnabled ? colors.primary : colors.textSecondary }]}>
+                  {isEdgeAiEnabled ? 'ACTIVE • ON-DEVICE SHIELD' : 'DISABLED • SHIELD INACTIVE'}
+                </Text>
+                <View style={{ marginLeft: 'auto' }}>
+                  <Switch
+                    value={isEdgeAiEnabled}
+                    onValueChange={setIsEdgeAiEnabled}
+                    trackColor={{ false: '#3A4854', true: 'rgba(0, 255, 204, 0.4)' }}
+                    thumbColor={isEdgeAiEnabled ? '#00FFCC' : '#7E8E9C'}
+                  />
+                </View>
+              </View>
+              <Text style={[styles.inspectorCardDesc, { color: colors.textPrimary, marginTop: 8 }]}>
+                Privacy-Preserving On-Device AI: Messages are scanned locally on your phone before encryption. The cloud server receives only ENCv1 ciphertext and never inspects your plaintext.
+              </Text>
+            </View>
+
+            {/* Diagnostics Card */}
+            <View style={[styles.inspectorCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+              <Text style={[styles.inspectorSectionTitle, { color: colors.primary }]}>
+                ⚙️ Edge-AI Engine Diagnostics
+              </Text>
+
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Model Version:</Text>
+                <Text style={[styles.specValue, { color: colors.textPrimary }]}>{getEdgeAiDiagnostics().modelVersion}</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Scan Latency:</Text>
+                <Text style={[styles.specValueCode, { color: colors.primary }]}>{getEdgeAiDiagnostics().scanLatency}</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Architecture:</Text>
+                <Text style={[styles.specValue, { color: colors.textPrimary }]}>Pure-TS Tokenizer & Leetspeak Normalizer</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Threat Corpus:</Text>
+                <Text style={[styles.specValue, { color: colors.textPrimary }]}>Google/Jigsaw Toxic Speech Corpus</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Flagging Threshold:</Text>
+                <Text style={[styles.specValueCode, { color: '#FF3366' }]}>Toxicity Score ≥ 65%</Text>
+              </View>
+              <View style={styles.specRow}>
+                <Text style={[styles.specLabel, { color: colors.textSecondary }]}>E2EE Boundary:</Text>
+                <Text style={[styles.specValue, { color: colors.textPrimary }]}>Pre-Encryption Local Shield (Zero Leakage)</Text>
+              </View>
+            </View>
+
+            {/* Interactive Live Safety Sandbox */}
+            <View style={[styles.inspectorCard, { borderColor: colors.primary, backgroundColor: colors.surface }]}>
+              <Text style={[styles.inspectorSectionTitle, { color: colors.primary }]}>
+                🧪 Interactive Edge-AI Sandbox
+              </Text>
+              <Text style={[styles.inspectorSubtext, { color: colors.textSecondary }]}>
+                Type or test phrases to inspect real-time leetspeak normalization and toxicity scoring:
+              </Text>
+
+              <TextInput
+                style={[
+                  styles.dialogTextInput,
+                  {
+                    backgroundColor: isDark ? '#050A0E' : '#F4F7F9',
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                    marginTop: 8,
+                  },
+                ]}
+                placeholder="Type a test phrase..."
+                placeholderTextColor={colors.textSecondary}
+                value={edgeAiDemoText}
+                onChangeText={setEdgeAiDemoText}
+              />
+
+              {/* Quick Preset Buttons */}
+              <View style={styles.sandboxPresetRow}>
+                <TouchableOpacity
+                  style={[styles.sandboxPresetChip, { borderColor: colors.primary }]}
+                  onPress={() => setEdgeAiDemoText('Great work on the project everyone!')}
+                >
+                  <Text style={[styles.sandboxPresetChipText, { color: colors.primary }]}>Clean Phrase</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.sandboxPresetChip, { borderColor: colors.accent }]}
+                  onPress={() => setEdgeAiDemoText('You are an idiot and a moron')}
+                >
+                  <Text style={[styles.sandboxPresetChipText, { color: colors.accent }]}>Hostile Stack</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.sandboxPresetChip, { borderColor: colors.danger }]}
+                  onPress={() => setEdgeAiDemoText('f4ck y0u b!tch')}
+                >
+                  <Text style={[styles.sandboxPresetChipText, { color: colors.danger }]}>Leetspeak</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.sandboxPresetChip, { borderColor: colors.danger }]}
+                  onPress={() => setEdgeAiDemoText('I will kill you')}
+                >
+                  <Text style={[styles.sandboxPresetChipText, { color: colors.danger }]}>Threat</Text>
+                </TouchableOpacity>
+              </View>
+
+              {(() => {
+                const testResult = analyzeContentSafety(edgeAiDemoText);
+                const { normalized, collapsed3 } = normalizeText(edgeAiDemoText);
+
+                return (
+                  <View style={{ marginTop: 12 }}>
+                    <View style={styles.specRow}>
+                      <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Normalized Text:</Text>
+                      <Text style={[styles.specValueCode, { color: colors.textPrimary }]}>{collapsed3 || normalized || '(empty)'}</Text>
+                    </View>
+                    <View style={styles.specRow}>
+                      <Text style={[styles.specLabel, { color: colors.textSecondary }]}>Toxicity Score:</Text>
+                      <Text style={[styles.specValueCode, { color: testResult.toxicityScore >= 65 ? colors.danger : colors.primary }]}>
+                        {testResult.toxicityScore}%
+                      </Text>
+                    </View>
+
+                    {/* Visual Meter */}
+                    <View style={styles.toxicityMeterTrack}>
+                      <View
+                        style={[
+                          styles.toxicityMeterFill,
+                          {
+                            width: `${testResult.toxicityScore}%`,
+                            backgroundColor: testResult.toxicityScore >= 65 ? colors.danger : colors.primary,
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    {/* Verdict */}
+                    <View
+                      style={[
+                        styles.verificationBadge,
+                        {
+                          backgroundColor: testResult.isFlagged ? 'rgba(255, 51, 102, 0.15)' : 'rgba(0, 255, 204, 0.15)',
+                          borderColor: testResult.isFlagged ? 'rgba(255, 51, 102, 0.35)' : 'rgba(0, 255, 204, 0.35)',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.verificationText, { color: testResult.isFlagged ? colors.danger : colors.primary }]}>
+                        {testResult.isFlagged ? '⚠️ FLAGGED: Content Advisory Triggered' : '✅ SAFE: Normal Transmission Allowed'}
+                      </Text>
+                      {testResult.reason && (
+                        <Text style={[{ color: colors.textPrimary, fontSize: 12, marginTop: 4, fontWeight: '600' }]}>
+                          Reason: {testResult.reason}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                );
+              })()}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.customSendBtn, { backgroundColor: colors.primary, marginTop: 10 }]}
+              onPress={() => setIsEdgeAiModalOpen(false)}
+            >
+              <Text style={styles.customSendBtnText}>Return to Chat</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* 5. Create Poll Modal */}
       <Modal
         visible={isPollModalOpen}
@@ -2230,6 +2508,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  headerBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   e2eeHeaderBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2239,8 +2524,26 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    marginTop: 8,
-    alignSelf: 'flex-start',
+  },
+  edgeAiHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 255, 204, 0.08)',
+    borderColor: 'rgba(0, 255, 204, 0.35)',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  edgeAiHeaderBadgeDisabled: {
+    backgroundColor: 'rgba(126, 142, 156, 0.1)',
+    borderColor: 'rgba(126, 142, 156, 0.3)',
+  },
+  edgeAiHeaderBadgeText: {
+    color: '#00FFCC',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   e2eePulseDot: {
     width: 6,
@@ -3488,6 +3791,57 @@ const styles = StyleSheet.create({
   verificationText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+
+  // ── Edge-AI Moderation Shield Styles ──
+  edgeAiWarningPill: {
+    backgroundColor: 'rgba(255, 51, 102, 0.12)',
+    borderColor: 'rgba(255, 51, 102, 0.35)',
+    borderWidth: 1,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  edgeAiWarningText: {
+    color: '#FF3366',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  sandboxPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  sandboxPresetChip: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  sandboxPresetChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  toxicityMeterTrack: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  toxicityMeterFill: {
+    height: '100%',
+    borderRadius: 3,
   },
 });
 

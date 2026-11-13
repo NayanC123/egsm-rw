@@ -24,7 +24,7 @@
     "newArchEnabled": false,
     "android": {
       "package": "com.nayan.egsm",
-      "versionCode": 21000,
+      "versionCode": 32000,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#050A0E",

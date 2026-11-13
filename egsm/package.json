@@ -3,6 +3,7 @@
   "version": "2.1.0",
   "main": "index.ts",
   "dependencies": {
+    "@expo/metro-runtime": "~57.0.17",
     "@supabase/supabase-js": "^2.109.0",
     "expo": "~57.0.29",
     "expo-document-picker": "~57.0.3",
@@ -10,7 +11,9 @@
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "^57.0.4",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
