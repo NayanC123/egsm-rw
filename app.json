@@ -1,3 +1,12 @@
 {
-  "expo": {}
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "aa5d46c3-be6c-478e-9e68-c7e42e9a2a51"
+      }
+    },
+    "android": {
+      "package": "com.nayanc123.egsmrw"
+    }
+  }
 }
